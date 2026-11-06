@@ -417,7 +417,7 @@
                     
                     return {
                         id: parseInt(cols[0]?.trim()) || (idx + 1),
-                        name: cols[1]?.replace(/^"|"$/g, '').trim() || 'Tanpa Nama',
+                        name: cols[1]?.replace(/^"|"$/g, '').replaceAll('""', '"').trim() || 'Tanpa Nama',
                         price: parseInt(cols[2]?.replace(/[^\d]/g, '')) || 0,
                         stock: parseInt(cols[3]?.replace(/[^\d]/g, '')) || 0,
                         category: categoryVal,
