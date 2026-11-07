@@ -1,203 +1,137 @@
 <!DOCTYPE html>
-<html lang="id" class="dark">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Katalog Sepeda Agung Jaya - Vercel Web App</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>ASA Bike Shop — Katalog Sepeda Online</title>
+    <meta name="description" content="ASA Bike Shop and Accessories. Katalog sepeda BMX, sepeda mini anak, dan MTB. Pesan langsung lewat WhatsApp.">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="favicon.png">
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
-                        },
-                        po: {
-                            50: '#fff7ed',
-                            100: '#ffedd5',
-                            500: '#f97316',
-                            600: '#ea580c',
-                            700: '#c2410c',
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
+            theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
+        };
+        // Terapkan tema tersimpan sebelum halaman tampil (hindari kedip)
+        try { if (localStorage.getItem('asa-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {}
     </script>
-    
+
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Font: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .glass-header {
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-            height: 6px;
-            width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #444;
-            border-radius: 4px;
-        }
-        /* Custom animations */
-        @keyframes slideInRight {
-            from { transform: translateX(100%); }
-            to { transform: translateX(0); }
-        }
-        .animate-slide-in {
-            animation: slideInRight 0.3s ease-out forwards;
-        }
+        html { -webkit-text-size-adjust: 100%; }
+        body { font-family: 'Inter', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+        .glass-header { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { scrollbar-width: none; }
+        .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+        /* Logo hitam transparan -> putih saat mode gelap */
+        .dark .logo-img { filter: invert(1); }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-drawer { animation: slideUp .28s ease-out; }
+        @media (min-width: 640px) { .animate-drawer { animation: slideInRight .28s ease-out; } }
+        .animate-fade { animation: fadeIn .2s ease-out; }
+        /* Input >= 16px supaya iPhone tidak auto-zoom saat mengetik */
+        input, textarea, select { font-size: 16px; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-900 dark:bg-black dark:text-gray-100 min-h-screen transition-colors duration-200">
+<body class="bg-gray-50 text-gray-900 dark:bg-zinc-950 dark:text-gray-100 min-h-screen transition-colors duration-200">
 
-    <!-- TOP VERCEL NOTICE BADGE -->
-    <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white text-xs py-1.5 px-4 text-center font-medium flex items-center justify-center gap-2 shadow-sm">
-        <span class="bg-white/20 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold">Vercel Ready</span>
-        <span>⚡ Terhubung ke Google Sheets | Live Web Catalog & WA Shopping Cart</span>
+    <!-- INFO BAR -->
+    <div class="bg-black text-white dark:bg-white dark:text-black text-[11px] sm:text-xs py-2 px-4 text-center font-semibold">
+        <i class="fa-solid fa-circle-info mr-1"></i> Minimal pembelian <b>2 unit</b> untuk setiap jenis sepeda
     </div>
 
-    <!-- MAIN NAVBAR -->
-    <header class="sticky top-0 z-40 glass-header bg-white/85 dark:bg-black/85 border-b border-gray-200 dark:border-zinc-800">
+    <!-- NAVBAR -->
+    <header class="sticky top-0 z-40 glass-header bg-white/90 dark:bg-zinc-950/90 border-b border-gray-200 dark:border-zinc-800">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                
-                <!-- Brand Title -->
-                <div class="flex items-center gap-3 cursor-pointer" onclick="resetFilters()">
-                    <div class="w-10 h-10 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center font-bold shadow-md">
-                        <i class="fa-solid fa-bicycle text-xl"></i>
+            <div class="flex items-center justify-between h-16 gap-3">
+                <a href="#" onclick="resetFilters(); return false;" class="flex items-center gap-3 min-w-0" aria-label="ASA Bike Shop - Beranda">
+                    <img src="logo-asa.png" alt="ASA" class="logo-img h-9 sm:h-10 w-auto shrink-0">
+                    <div class="hidden min-[380px]:block min-w-0 border-l border-gray-200 dark:border-zinc-800 pl-3">
+                        <p class="font-extrabold text-sm sm:text-base leading-tight truncate">Bike Shop</p>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-tight truncate">and Accessories</p>
                     </div>
-                    <div>
-                        <h1 class="font-extrabold text-base sm:text-lg tracking-tight leading-none">Sepeda Agung Jaya</h1>
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Katalog Online & Order WA</p>
-                    </div>
-                </div>
+                </a>
 
-                <!-- Right Action Controls -->
-                <div class="flex items-center gap-2 sm:gap-3">
-                    
-                    <!-- WA Settings Button -->
-                    <button onclick="toggleWAConfigModal()" title="Pengaturan No. WA Toko" class="p-2 rounded-xl border border-gray-200 dark:border-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-900 text-gray-600 dark:text-gray-300 text-xs sm:text-sm flex items-center gap-1.5 transition">
-                        <i class="fa-brands fa-whatsapp text-emerald-500 text-base"></i>
-                        <span class="hidden md:inline font-medium">No. WA Toko</span>
-                    </button>
-
-                    <!-- Dark Mode Toggle -->
-                    <button id="themeToggle" onclick="toggleTheme()" class="p-2 rounded-xl border border-gray-200 dark:border-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-900 text-gray-600 dark:text-gray-300 text-sm transition">
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleTheme()" aria-label="Ganti tema" class="w-10 h-10 rounded-xl border border-gray-200 dark:border-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-900 text-gray-600 dark:text-gray-300 flex items-center justify-center transition">
                         <i id="themeIcon" class="fa-solid fa-moon"></i>
                     </button>
-
-                    <!-- Floating Shopping Cart Button -->
-                    <button onclick="toggleCartDrawer()" class="relative p-2.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-md transition">
-                        <i class="fa-solid fa-cart-shopping text-base"></i>
+                    <button onclick="openCart()" aria-label="Buka keranjang" class="relative h-10 px-3 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-sm font-bold flex items-center gap-2 shadow-sm transition">
+                        <i class="fa-solid fa-cart-shopping"></i>
                         <span class="hidden sm:inline">Keranjang</span>
-                        <span id="cartBadge" class="bg-white text-emerald-700 text-[11px] font-extrabold px-2 py-0.5 rounded-full shadow-sm">
-                            0
-                        </span>
+                        <span id="cartBadge" class="bg-white text-emerald-700 text-[11px] font-extrabold min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">0</span>
                     </button>
                 </div>
             </div>
         </div>
     </header>
 
-    <!-- MAIN CONTAINER -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
 
-        <!-- HERO INTRO & STATS -->
-        <section class="mb-8 p-6 rounded-2xl bg-gradient-to-br from-zinc-100 to-white dark:from-zinc-900 dark:to-zinc-950 border border-gray-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
-            <div class="absolute -right-10 -bottom-10 opacity-5 dark:opacity-10 pointer-events-none">
-                <i class="fa-solid fa-bicycle text-[200px]"></i>
+        <!-- HERO -->
+        <section class="mb-6 p-5 sm:p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
+            <div class="absolute -right-8 -bottom-10 opacity-[0.04] dark:opacity-[0.07] pointer-events-none">
+                <i class="fa-solid fa-bicycle text-[180px] sm:text-[240px]"></i>
             </div>
-            <div class="relative z-10 max-w-3xl">
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-3 border border-emerald-500/20">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span id="dataStatusText">Data Terhubung Google Sheets</span>
-                </div>
-                <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">Katalog Sepeda Terbaru</h2>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
-                    Pilih sepeda impian Anda, masukkan ke keranjang, dan kirimkan daftar pesanan Anda langsung ke WhatsApp toko kami secara praktis!
+            <div class="relative max-w-2xl">
+                <h1 class="text-2xl sm:text-4xl font-extrabold tracking-tight mb-2">Katalog Sepeda ASA</h1>
+                <p class="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
+                    Pilih sepeda, masukkan ke keranjang, lalu kirim pesanan langsung ke WhatsApp toko kami.
                 </p>
-
-                <!-- Features Badges -->
-                <div class="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-zinc-800">
-                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-check-double text-emerald-500"></i> Pilih Banyak Barang</span>
-                    <span>•</span>
-                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-clock text-amber-500"></i> Fitur Pre-Order</span>
-                    <span>•</span>
-                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-bolt text-blue-500"></i> Live Update Stok</span>
+                <div class="flex flex-wrap gap-2 text-xs font-semibold">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800"><i class="fa-solid fa-boxes-stacked text-emerald-500"></i> Min. 2 unit / jenis</span>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800"><i class="fa-solid fa-clock text-amber-500"></i> Bisa Pre-Order</span>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800"><i class="fa-brands fa-whatsapp text-emerald-500"></i> Order via WhatsApp</span>
                 </div>
             </div>
         </section>
 
-        <!-- SEARCH & FILTER TOOLBAR -->
-        <section class="mb-6 space-y-4">
-            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-                
-                <!-- Search Box -->
+        <!-- SEARCH & FILTER -->
+        <section class="mb-5 space-y-3">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <div class="relative flex-1">
                     <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                    <input type="text" id="searchInput" onkeyup="filterProducts()" placeholder="Cari sepeda (misal: Velion, BMX 16, MTB, Labubu, Pre-Order)..." 
-                        class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm placeholder-gray-400 transition">
+                    <input type="search" id="searchInput" oninput="filterProducts()" placeholder="Cari sepeda (BMX, MTB, Labubu...)" autocomplete="off"
+                        class="w-full h-11 pl-10 pr-4 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-gray-400 transition">
                 </div>
-
-                <!-- Sort Dropdown & Quick Stats -->
-                <div class="flex items-center gap-3 justify-between sm:justify-end">
-                    <span id="productCount" class="text-xs font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-zinc-800 px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-800">
-                        Menampilkan 0 barang
-                    </span>
-
-                    <select id="sortSelect" onchange="filterProducts()" class="py-2.5 px-3 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        <option value="default">Urutan Default</option>
-                        <option value="price-low">Harga: Terendah ke Tinggi</option>
-                        <option value="price-high">Harga: Tertinggi ke Rendah</option>
-                        <option value="name-asc">Nama: A - Z</option>
-                    </select>
-                </div>
+                <select id="sortSelect" onchange="filterProducts()" aria-label="Urutkan"
+                    class="h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:w-56">
+                    <option value="default">Urutan Default</option>
+                    <option value="price-low">Harga Terendah</option>
+                    <option value="price-high">Harga Tertinggi</option>
+                    <option value="name-asc">Nama A - Z</option>
+                </select>
             </div>
 
-            <!-- Category Filter Tabs -->
-            <div class="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar text-xs">
-                <button onclick="setCategory('all')" id="cat-all" class="cat-btn px-4 py-2 rounded-xl font-semibold bg-black text-white dark:bg-white dark:text-black whitespace-nowrap transition shadow-sm">
-                    Semua Produk
-                </button>
-                <button onclick="setCategory('bmx')" id="cat-bmx" class="cat-btn px-4 py-2 rounded-xl font-medium bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-zinc-800 hover:border-gray-400 whitespace-nowrap transition">
-                    🚲 Sepeda BMX
-                </button>
-                <button onclick="setCategory('mini')" id="cat-mini" class="cat-btn px-4 py-2 rounded-xl font-medium bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-zinc-800 hover:border-gray-400 whitespace-nowrap transition">
-                    👧 Sepeda Mini / Anak
-                </button>
-                <button onclick="setCategory('mtb')" id="cat-mtb" class="cat-btn px-4 py-2 rounded-xl font-medium bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-zinc-800 hover:border-gray-400 whitespace-nowrap transition">
-                    🚵 Sepeda MTB (Gunung)
-                </button>
-                <button onclick="setCategory('pre-order')" id="cat-pre-order" class="cat-btn px-4 py-2 rounded-xl font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 whitespace-nowrap transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-clock"></i> ⏳ Pre-Order
-                </button>
-            </div>
+            <!-- Kategori (geser di hape) -->
+            <div id="categoryBar" class="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 text-sm"></div>
+
+            <p id="productCount" class="text-xs font-medium text-gray-500 dark:text-gray-400"></p>
         </section>
 
-        <!-- PRODUCT GRID -->
-        <section id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            <!-- Dynamic Content loaded via JS -->
-        </section>
+        <!-- PRODUCT GRID: 2 kolom di hape -->
+        <section id="productGrid" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5"></section>
+
+        <!-- LOADING -->
+        <div id="loadingState" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
+            <div class="h-72 rounded-2xl bg-gray-200 dark:bg-zinc-900 animate-pulse"></div>
+            <div class="h-72 rounded-2xl bg-gray-200 dark:bg-zinc-900 animate-pulse"></div>
+            <div class="h-72 rounded-2xl bg-gray-200 dark:bg-zinc-900 animate-pulse hidden md:block"></div>
+            <div class="h-72 rounded-2xl bg-gray-200 dark:bg-zinc-900 animate-pulse hidden xl:block"></div>
+        </div>
 
         <!-- EMPTY STATE -->
         <div id="emptyState" class="hidden text-center py-16 px-4">
@@ -205,619 +139,577 @@
                 <i class="fa-solid fa-magnifying-glass text-2xl"></i>
             </div>
             <h3 class="text-base font-bold mb-1">Sepeda tidak ditemukan</h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Coba gunakan kata kunci lain atau ubah kategori filter.</p>
-            <button onclick="resetFilters()" class="text-xs text-emerald-500 font-semibold hover:underline">Reset Pencarian</button>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Coba kata kunci lain atau ganti kategori.</p>
+            <button onclick="resetFilters()" class="text-sm text-emerald-600 font-semibold hover:underline">Reset Pencarian</button>
         </div>
-
     </main>
 
     <!-- FOOTER -->
-    <footer class="mt-16 border-t border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-8">
-        <div class="max-w-7xl mx-auto px-4 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-                <p class="font-bold text-sm">Sepeda Agung Jaya Tabanan</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Katalog Online & Transaksi Terintegrasi WhatsApp</p>
-            </div>
-            <div class="text-xs text-gray-400 flex items-center gap-1">
-                <span>Hosted on</span>
-                <span class="inline-flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-200 px-2 py-0.5 rounded bg-gray-100 dark:bg-zinc-800">
-                    ▲ Vercel
-                </span>
+    <footer class="mt-12 border-t border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 pt-8 pb-28 sm:pb-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-5 text-center sm:text-left">
+            <img src="logo-asa-full.png" alt="ASA Bike Shop and Accessories" class="logo-img h-16 w-auto">
+            <div class="text-sm">
+                <a id="footerWA" href="#" target="_blank" rel="noopener" class="inline-flex items-center gap-2 font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+                    <i class="fa-brands fa-whatsapp text-lg"></i> <span id="footerWAText"></span>
+                </a>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">© <span id="year"></span> ASA Bike Shop and Accessories</p>
             </div>
         </div>
     </footer>
 
-    <!-- SHOPPING CART SLIDE-OVER DRAWER -->
-    <div id="cartDrawer" class="fixed inset-0 z-50 hidden">
-        <!-- Backdrop Overlay -->
-        <div onclick="toggleCartDrawer()" class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"></div>
-        
-        <!-- Drawer Content Panel -->
-        <div class="absolute inset-y-0 right-0 max-w-full flex pl-10">
-            <div class="w-screen max-w-md bg-white dark:bg-zinc-900 border-l border-gray-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-slide-in">
-                
-                <!-- Drawer Header -->
-                <div class="p-4 border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between bg-gray-50 dark:bg-zinc-950">
-                    <div class="flex items-center gap-2">
-                        <i class="fa-solid fa-cart-shopping text-emerald-500 text-lg"></i>
-                        <h2 class="font-bold text-base">Keranjang Belanja</h2>
-                        <span id="drawerCartCount" class="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold px-2 py-0.5 rounded-full border border-emerald-500/20">0 Item</span>
+    <!-- FLOATING CART BAR (hape) -->
+    <div id="mobileCartBar" class="sm:hidden fixed bottom-0 inset-x-0 z-30 px-4 pt-2 pb-safe bg-gradient-to-t from-gray-50 via-gray-50/95 to-transparent dark:from-zinc-950 dark:via-zinc-950/95 hidden">
+        <button onclick="openCart()" class="w-full h-14 px-4 rounded-2xl bg-emerald-600 active:bg-emerald-700 text-white font-bold flex items-center justify-between shadow-lg">
+            <span class="flex items-center gap-2"><i class="fa-solid fa-cart-shopping"></i> <span id="mobileCartQty">0 unit</span></span>
+            <span class="flex items-center gap-2"><span id="mobileCartTotal">Rp 0</span> <i class="fa-solid fa-chevron-right text-xs"></i></span>
+        </button>
+    </div>
+
+    <!-- CART DRAWER (bottom sheet di hape, panel kanan di desktop) -->
+    <div id="cartDrawer" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
+        <div onclick="closeCart()" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="animate-drawer absolute inset-x-0 bottom-0 max-h-[92vh] rounded-t-3xl sm:rounded-none sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-md bg-white dark:bg-zinc-900 shadow-2xl flex flex-col">
+            <div class="sm:hidden flex justify-center pt-2"><span class="w-10 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-700"></span></div>
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-cart-shopping text-emerald-500"></i>
+                    <h2 id="cartTitle" class="font-bold">Keranjang Belanja</h2>
+                    <span id="drawerCartCount" class="text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full">0 unit</span>
+                </div>
+                <button onclick="closeCart()" aria-label="Tutup keranjang" class="w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center justify-center text-gray-500">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto overscroll-contain">
+                <div id="cartItemsContainer" class="p-4 space-y-3"></div>
+
+                <div id="checkoutForm" class="px-4 pb-4 space-y-3">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400"><i class="fa-solid fa-user-pen mr-1"></i> Data Pemesan</h4>
+                    <input type="text" id="customerName" placeholder="Nama lengkap *" autocomplete="name" class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <textarea id="customerNotes" rows="3" placeholder="Alamat pengiriman / catatan (warna, dll)" autocomplete="street-address" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="p-4 pb-safe border-t border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-950 space-y-3">
+                <div class="flex items-end justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Total</p>
+                        <p id="cartTotalPrice" class="text-xl font-black text-emerald-600 dark:text-emerald-400">Rp 0</p>
                     </div>
-                    <button onclick="toggleCartDrawer()" class="w-8 h-8 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-800 flex items-center justify-center text-gray-500 transition">
-                        <i class="fa-solid fa-xmark"></i>
+                    <button onclick="clearCart()" class="text-xs text-red-500 hover:text-red-600 font-semibold flex items-center gap-1 py-2">
+                        <i class="fa-solid fa-trash-can"></i> Kosongkan
                     </button>
                 </div>
-
-                <!-- Drawer Cart Items List -->
-                <div id="cartItemsContainer" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                    <!-- Populated via JS -->
-                </div>
-
-                <!-- Customer Order Form & Checkout Footer -->
-                <div class="p-4 border-t border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-950 space-y-4">
-                    
-                    <!-- Customer Form Inputs -->
-                    <div class="space-y-2">
-                        <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                            <i class="fa-solid fa-user-pen"></i> Data Pemesan
-                        </h4>
-                        <input type="text" id="customerName" placeholder="Nama Lengkap Anda..." class="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        <textarea id="customerNotes" rows="2" placeholder="Alamat pengiriman / catatan pesanan..." class="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"></textarea>
-                    </div>
-
-                    <!-- Price Total Summary -->
-                    <div class="pt-2 border-t border-gray-200 dark:border-zinc-800 flex items-center justify-between">
-                        <div>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">Total Keseluruhan:</p>
-                            <p id="cartTotalPrice" class="text-xl font-black text-emerald-600 dark:text-emerald-400">Rp 0</p>
-                        </div>
-                        <button onclick="clearCart()" class="text-xs text-red-500 hover:text-red-600 font-medium flex items-center gap-1">
-                            <i class="fa-solid fa-trash-can"></i> Kosongkan
-                        </button>
-                    </div>
-
-                    <!-- Send WA Button -->
-                    <button onclick="sendOrderToWhatsApp()" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg transition">
-                        <i class="fa-brands fa-whatsapp text-lg"></i> Kirim Pesanan via WhatsApp
-                    </button>
-                </div>
-
+                <button onclick="sendOrderToWhatsApp()" class="w-full h-12 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-md transition">
+                    <i class="fa-brands fa-whatsapp text-xl"></i> Kirim Pesanan via WhatsApp
+                </button>
             </div>
         </div>
     </div>
 
     <!-- PRODUCT DETAIL MODAL -->
-    <div id="detailModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative">
-            <button onclick="closeModal()" class="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition">
+    <div id="detailModal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+        <div onclick="closeModal()" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="animate-fade absolute inset-x-0 bottom-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg max-h-[92vh] overflow-y-auto overscroll-contain bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-2xl shadow-2xl">
+            <button onclick="closeModal()" aria-label="Tutup" class="absolute top-3 right-3 z-10 w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80">
                 <i class="fa-solid fa-xmark"></i>
             </button>
-            <div id="modalContent">
-                <!-- Loaded via JS -->
-            </div>
+            <div id="modalContent"></div>
         </div>
     </div>
 
-    <!-- SETTINGS / WA NUMBER MODAL -->
-    <div id="waConfigModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-base font-bold flex items-center gap-2">
-                    <i class="fa-brands fa-whatsapp text-emerald-500"></i> Pengaturan Nomor WA Toko
-                </h3>
-                <button onclick="toggleWAConfigModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">
-                Nomor WhatsApp ini akan menerima rincian keranjang belanja otomatis. Gunakan kode negara (contoh: <b>628123456789</b>).
-            </p>
-            <div class="mb-4">
-                <label class="block text-xs font-semibold mb-1 text-gray-700 dark:text-gray-300">Nomor WhatsApp Toko</label>
-                <input type="text" id="waNumberInput" value="628123456789" class="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            </div>
-            <div class="flex justify-end gap-2">
-                <button onclick="toggleWAConfigModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800">
-                    Batal
-                </button>
-                <button onclick="saveWANumber()" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md">
-                    Simpan Nomor
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- TOAST -->
+    <div id="toastContainer" class="fixed top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none"></div>
 
-    <!-- TOAST NOTIFICATION CONTAINER -->
-    <div id="toastContainer" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none"></div>
-
-    <!-- JAVASCRIPT LOGIC -->
     <script>
         // ==========================================
-        // CONFIGURATION: GOOGLE SHEETS CSV LINK
+        // PENGATURAN TOKO
         // ==========================================
-        // Masukkan link CSV publik Google Sheets Anda di bawah ini:
-        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRlcQPHDkd2lbexP4kaTwZqndkTyNry3yC1jCnuu2n4i3MXTd_ar3v8Y2Z4Kp4BhC9ykvBJj6Xpn0O2/pub?output=csv'; // Contoh: 'https://docs.google.com/spreadsheets/d/e/.../pub?output=csv'
+        const STORE_NAME = 'ASA Bike Shop';
+        const STORE_WA_NUMBER = '6285111418200'; // 0851-1141-8200 (format internasional, tanpa 0 di depan)
+        const STORE_WA_DISPLAY = '0851-1141-8200';
+        const MIN_QTY = 2; // minimal pembelian per jenis sepeda
+        const PO_MAX_QTY = 99;
 
-        let storeWANumber = '628123456789'; // Default Store WA Number
-        let currentCategory = 'all';
-        let allProducts = [];
-        let shoppingCart = []; // { id, product, qty }
+        // Link CSV publik Google Sheets (kolom: id, name, price, stock, category, image, desc)
+        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRlcQPHDkd2lbexP4kaTwZqndkTyNry3yC1jCnuu2n4i3MXTd_ar3v8Y2Z4Kp4BhC9ykvBJj6Xpn0O2/pub?output=csv';
 
-        // MOCK DATA FALLBACK (Seluruh 22 Sepeda Foto Catatan)
-        const fallbackProducts = [
-            { id: 1, name: '12" BMX Velion', price: 490000, stock: 5, category: 'bmx', size: '12"', image: '', desc: 'Sepeda BMX anak 12 inch cocok untuk usia 2-4 tahun.' },
-            { id: 2, name: '12" Mini Monchichi Tinkerbell', price: 490000, stock: 2, category: 'mini', size: '12"', image: '', desc: 'Sepeda mini anak perempuan motif Monchichi Tinkerbell.' },
-            { id: 3, name: '12" Mini Tango HKM', price: 495000, stock: 3, category: 'mini', size: '12"', image: '', desc: 'Sepeda mini 12 inch motif Hello Kitty Hello Moon.' },
-            { id: 4, name: '12" Mini Velion', price: 490000, stock: 4, category: 'mini', size: '12"', image: '', desc: 'Sepeda mini klasik 12 inch dari Velion.' },
-            { id: 5, name: '12" Mini Velion + Stir', price: 495000, stock: 3, category: 'mini', size: '12"', image: '', desc: 'Dilengkapi tongkat kemudi stir dorongan untuk orang tua.' },
-            { id: 6, name: '16" BMX Tango Race', price: 495000, stock: 3, category: 'bmx', size: '16"', image: '', desc: 'Sepeda BMX 16 inch variasi racing sporty.' },
-            { id: 7, name: '16" BMX Velion', price: 490000, stock: 5, category: 'bmx', size: '16"', image: '', desc: 'Sepeda BMX 16 inch ban lebar Velion.' },
-            { id: 8, name: '16" Mini Monchichi Tinkerbell', price: 500000, stock: 4, category: 'mini', size: '16"', image: '', desc: 'Sepeda mini 16 inch Monchichi Tinkerbell.' },
-            { id: 9, name: '16" Mini Monchichi Tinkerbell Musik', price: 510000, stock: 2, category: 'mini', size: '16"', image: '', desc: 'Dilengkapi fitur musik dan lampu keranjang depan.' },
-            { id: 10, name: '16" Mini Tango HKM', price: 510000, stock: 3, category: 'mini', size: '16"', image: '', desc: 'Sepeda mini anak 16 inch Tango edisi HKM.' },
-            { id: 11, name: '18" BMX Centrum', price: 525000, stock: 1, category: 'bmx', size: '18"', image: '', desc: 'BMX Centrum 18 inch frame kuat tangguh.' },
-            { id: 12, name: '18" BMX Tango Lalix', price: 485000, stock: 2, category: 'bmx', size: '18"', image: '', desc: 'Sepeda BMX 18 inch Tango Lalix.' },
-            { id: 13, name: '18" BMX Velion Keranjang', price: 530000, stock: 2, category: 'bmx', size: '18"', image: '', desc: 'BMX Velion 18 inch dengan keranjang besi depan.' },
-            { id: 14, name: '18" Mini Labubu', price: 585000, stock: 0, category: 'pre-order', size: '18"', image: '', desc: 'Edisi favorit Labubu! Tersedia untuk Pre-Order.' },
-            { id: 15, name: '18" Mini Tango HKM', price: 525000, stock: 4, category: 'mini', size: '18"', image: '', desc: 'Sepeda mini 18 inch Tango HKM.' },
-            { id: 16, name: '18" Mini Tango Princess', price: 535000, stock: 2, category: 'mini', size: '18"', color: '', desc: 'Sepeda mini tema Princess cantik.' },
-            { id: 17, name: '20" BMX Velion', price: 655000, stock: 6, category: 'bmx', size: '20"', image: '', desc: 'BMX ukuran 20 inch untuk remaja & dewasa.' },
-            { id: 18, name: '20" Mini Velion', price: 690000, stock: 3, category: 'mini', size: '20"', image: '', desc: 'Sepeda mini ukuran 20 inch.' },
-            { id: 19, name: '20" MTB Velion', price: 985000, stock: 2, category: 'mtb', size: '20"', image: '', desc: 'Sepeda Gunung (MTB) Velion 20 inch.' },
-            { id: 20, name: '24" MTB Velion', price: 1055000, stock: 2, category: 'mtb', size: '24"', image: '', desc: 'Sepeda Gunung MTB Velion 24 inch.' },
-            { id: 21, name: '26" MTB Velion', price: 1080000, stock: 3, category: 'mtb', size: '26"', image: '', desc: 'MTB Velion 26 inch standar dewasa.' },
-            { id: 22, name: '27.5" MTB Foster', price: 1125000, stock: 0, category: 'pre-order', size: '27.5"', image: '', desc: 'MTB Foster 27.5 inch tangguh. Status Pre-Order.' }
+        const CATEGORIES = [
+            { id: 'all', label: 'Semua' },
+            { id: 'bmx', label: '🚲 BMX' },
+            { id: 'mini', label: '👧 Mini / Anak' },
+            { id: 'mtb', label: '🚵 MTB' },
+            { id: 'pre-order', label: '⏳ Pre-Order' }
         ];
 
-        // Format Currency (Rupiah)
+        let currentCategory = 'all';
+        let allProducts = [];
+        let shoppingCart = []; // { id, qty }
+
+        // Data cadangan jika Google Sheets gagal dimuat
+        const fallbackProducts = [
+            { id: 1, name: '12" BMX Velion', price: 490000, stock: 5, category: 'bmx' },
+            { id: 2, name: '12" Mini Monchichi Tinkerbell', price: 490000, stock: 5, category: 'mini' },
+            { id: 3, name: '12" Mini Tango HKM', price: 495000, stock: 5, category: 'mini' },
+            { id: 4, name: '12" Mini Velion', price: 490000, stock: 5, category: 'mini' },
+            { id: 5, name: '12" Mini Velion + Stir', price: 495000, stock: 5, category: 'mini' },
+            { id: 6, name: '16" BMX Tango Race', price: 495000, stock: 5, category: 'bmx' },
+            { id: 7, name: '16" BMX Velion', price: 490000, stock: 5, category: 'bmx' },
+            { id: 8, name: '16" Mini Monchichi Tinkerbell', price: 500000, stock: 5, category: 'mini' },
+            { id: 9, name: '16" Mini Monchichi Tinkerbell Musik', price: 510000, stock: 5, category: 'mini' },
+            { id: 10, name: '16" Mini Tango HKM', price: 510000, stock: 5, category: 'mini' },
+            { id: 11, name: '18" BMX Centrum', price: 525000, stock: 5, category: 'bmx' },
+            { id: 12, name: '18" BMX Tango Lolix', price: 485000, stock: 5, category: 'bmx' },
+            { id: 13, name: '18" BMX Velion Keranjang', price: 530000, stock: 5, category: 'bmx' },
+            { id: 14, name: '18" Mini Labubu', price: 585000, stock: 5, category: 'mini' },
+            { id: 15, name: '18" Mini Tango HKM', price: 525000, stock: 5, category: 'mini' },
+            { id: 16, name: '18" Mini Tango Princess', price: 535000, stock: 5, category: 'mini' },
+            { id: 17, name: '20" BMX Velion', price: 655000, stock: 5, category: 'bmx' },
+            { id: 18, name: '20" Mini Velion', price: 690000, stock: 5, category: 'mini' },
+            { id: 19, name: '20" MTB Velion', price: 985000, stock: 5, category: 'mtb' },
+            { id: 20, name: '24" MTB Velion', price: 1055000, stock: 5, category: 'mtb' },
+            { id: 21, name: '26" MTB Velion', price: 1080000, stock: 5, category: 'mtb' },
+            { id: 22, name: '27.5" MTB Foster', price: 1125000, stock: 5, category: 'mtb' }
+        ].map(p => ({ image: '', desc: '', ...p }));
+
+        // ==========================================
+        // HELPER
+        // ==========================================
+        const $ = id => document.getElementById(id);
+
         function formatRupiah(num) {
             return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
         }
 
-        // SVG Visual Generators for items without images
-        function getBikeSvg(category) {
+        // Amankan teks sebelum dimasukkan ke HTML (nama seperti 12" bikin HTML rusak kalau tidak di-escape)
+        function esc(str) {
+            return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        const isPO = p => p.category === 'pre-order' || p.category === 'po';
+        const maxQty = p => isPO(p) ? PO_MAX_QTY : p.stock;
+        const canBuy = p => maxQty(p) >= MIN_QTY;
+        const findProduct = id => allProducts.find(p => p.id === id);
+
+        function getBikeSvg(category, size = 'w-16 h-16') {
             const cat = (category || '').toLowerCase();
-            if (cat === 'bmx') {
-                return `<svg class="w-20 h-20 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm14 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M5 15l4-8 4 3 4-5"/><path d="M9 7l4 8h6"/><path d="M11 10h4"/></svg>`;
-            } else if (cat === 'mini') {
-                return `<svg class="w-20 h-20 text-pink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm14 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M5 15h6l3-6h4"/><path d="M11 15v-6h4"/><path d="M17 9h3v3h-3z"/></svg>`;
-            } else if (cat === 'pre-order' || cat === 'po') {
-                return `<svg class="w-20 h-20 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg>`;
-            } else {
-                // MTB
-                return `<svg class="w-20 h-20 text-teal-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm14 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M5 15l5-9h4l4 9"/><path d="M10 6l3 9"/><path d="M7 11h8"/></svg>`;
+            const paths = {
+                bmx: ['text-amber-500', '<path d="M5 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm14 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M5 15l4-8 4 3 4-5"/><path d="M9 7l4 8h6"/><path d="M11 10h4"/>'],
+                mini: ['text-pink-500', '<path d="M5 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm14 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M5 15h6l3-6h4"/><path d="M11 15v-6h4"/><path d="M17 9h3v3h-3z"/>'],
+                'pre-order': ['text-amber-500', '<circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/>'],
+                mtb: ['text-teal-500', '<path d="M5 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm14 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M5 15l5-9h4l4 9"/><path d="M10 6l3 9"/><path d="M7 11h8"/>']
+            };
+            const [color, inner] = paths[cat === 'po' ? 'pre-order' : cat] || paths.mtb;
+            return `<svg class="${size} ${color}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${inner}</svg>`;
+        }
+
+        // Dipanggil saat gambar gagal dimuat -> ganti dengan ikon sepeda
+        function imgFallback(img) {
+            img.onerror = null;
+            const wrap = document.createElement('div');
+            wrap.className = 'w-full h-full flex items-center justify-center';
+            wrap.innerHTML = getBikeSvg(img.dataset.cat, img.dataset.size || 'w-16 h-16');
+            img.replaceWith(wrap);
+        }
+
+        function productImage(item, imgClass, svgSize) {
+            if (item.image) {
+                return `<img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy" data-cat="${esc(item.category)}" data-size="${svgSize}" onerror="imgFallback(this)" class="${imgClass}">`;
             }
+            return `<div class="w-full h-full flex items-center justify-center">${getBikeSvg(item.category, svgSize)}</div>`;
+        }
+
+        // Parser CSV yang benar (mendukung tanda kutip, "" di dalam teks, dan baris CRLF)
+        function parseCSV(text) {
+            const rows = [];
+            let row = [], field = '', inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const c = text[i];
+                if (inQuotes) {
+                    if (c === '"') {
+                        if (text[i + 1] === '"') { field += '"'; i++; }
+                        else inQuotes = false;
+                    } else field += c;
+                } else if (c === '"') inQuotes = true;
+                else if (c === ',') { row.push(field); field = ''; }
+                else if (c === '\n' || c === '\r') {
+                    if (c === '\r' && text[i + 1] === '\n') i++;
+                    row.push(field); rows.push(row); row = []; field = '';
+                } else field += c;
+            }
+            if (field !== '' || row.length) { row.push(field); rows.push(row); }
+            return rows;
         }
 
         // ==========================================
-        // FETCH DATA FROM GOOGLE SHEETS CSV
+        // AMBIL DATA DARI GOOGLE SHEETS
         // ==========================================
         async function loadProducts() {
-            const statusText = document.getElementById('dataStatusText');
-            
-            if (!SHEET_CSV_URL || SHEET_CSV_URL.trim() === '') {
-                console.log('Using Fallback Mock Data (No Sheet URL configured)');
-                allProducts = [...fallbackProducts];
-                if(statusText) statusText.innerText = 'Mode Demo (22 Barang Loaded)';
-                filterProducts();
-                return;
-            }
-
             try {
-                const res = await fetch(SHEET_CSV_URL);
-                if (!res.ok) throw new Error('Network response error');
-                const csvText = await res.text();
-                
-                const lines = csvText.split('\n').filter(line => line.trim() !== '');
-                if (lines.length <= 1) throw new Error('CSV is empty');
-
-                allProducts = lines.slice(1).map((line, idx) => {
-                    const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                    const categoryVal = (cols[4] || 'bmx').replace(/^"|"$/g, '').trim().toLowerCase();
-                    
-                    return {
-                        id: parseInt(cols[0]?.trim()) || (idx + 1),
-                        name: cols[1]?.replace(/^"|"$/g, '').replaceAll('""', '"').trim() || 'Tanpa Nama',
-                        price: parseInt(cols[2]?.replace(/[^\d]/g, '')) || 0,
-                        stock: parseInt(cols[3]?.replace(/[^\d]/g, '')) || 0,
-                        category: categoryVal,
-                        image: cols[5]?.replace(/^"|"$/g, '').trim() || '',
-                        desc: cols[6]?.replace(/^"|"$/g, '').trim() || 'Sepeda berkualitas dari toko kami.'
-                    };
-                });
-
-                if(statusText) statusText.innerText = `Terhubung Live Google Sheets (${allProducts.length} Items)`;
-                filterProducts();
+                const res = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const rows = parseCSV(await res.text());
+                const products = rows.slice(1)
+                    .filter(cols => (cols[1] || '').trim() !== '') // lewati baris kosong
+                    .map((cols, idx) => ({
+                        id: parseInt(cols[0], 10) || idx + 1,
+                        name: cols[1].trim(),
+                        price: parseInt((cols[2] || '').replace(/[^\d]/g, ''), 10) || 0,
+                        stock: parseInt((cols[3] || '').replace(/[^\d]/g, ''), 10) || 0,
+                        category: (cols[4] || 'bmx').trim().toLowerCase(),
+                        image: (cols[5] || '').trim(),
+                        desc: (cols[6] || '').trim()
+                    }));
+                if (!products.length) throw new Error('CSV kosong');
+                allProducts = products;
             } catch (err) {
-                console.warn('Gagal memuat Google Sheets CSV, menggunakan fallback data:', err);
-                allProducts = [...fallbackProducts];
-                if(statusText) statusText.innerText = 'Gagal Sheet (Fallback Loaded)';
-                filterProducts();
+                console.warn('Gagal memuat Google Sheets, pakai data cadangan:', err);
+                allProducts = fallbackProducts;
             }
+            $('loadingState').classList.add('hidden');
+            loadCart();
+            filterProducts();
+            updateCartUI();
         }
 
         // ==========================================
-        // PRODUCT RENDER & FILTER LOGIC
+        // RENDER PRODUK
         // ==========================================
-        function renderProducts(items) {
-            const grid = document.getElementById('productGrid');
-            const emptyState = document.getElementById('emptyState');
-            const countLabel = document.getElementById('productCount');
+        function stockBadge(item) {
+            if (isPO(item)) return `<span class="bg-amber-500 text-white text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full"><i class="fa-solid fa-clock mr-0.5"></i> Pre-Order</span>`;
+            if (item.stock <= 0) return `<span class="bg-gray-700 text-white text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full">Habis</span>`;
+            if (item.stock <= 3) return `<span class="bg-red-500 text-white text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full">Sisa ${item.stock}</span>`;
+            return `<span class="bg-emerald-600 text-white text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full">Stok ${item.stock}</span>`;
+        }
 
-            grid.innerHTML = '';
-            countLabel.innerText = `Menampilkan ${items.length} barang`;
-
-            if (items.length === 0) {
-                grid.classList.add('hidden');
-                emptyState.classList.remove('hidden');
-                return;
-            } else {
-                grid.classList.remove('hidden');
-                emptyState.classList.add('hidden');
+        function buyButton(item, extra = '') {
+            if (!canBuy(item)) {
+                return `<button disabled class="w-full h-10 rounded-xl bg-gray-200 dark:bg-zinc-800 text-gray-500 font-bold text-xs sm:text-sm cursor-not-allowed ${extra}">${item.stock <= 0 ? 'Stok Habis' : 'Stok Kurang'}</button>`;
             }
+            const po = isPO(item);
+            const bg = po ? 'bg-amber-500 hover:bg-amber-400 active:bg-amber-600' : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700';
+            return `<button onclick="addToCart(${item.id})" class="w-full h-10 rounded-xl ${bg} text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-sm transition ${extra}">
+                <i class="fa-solid ${po ? 'fa-clock' : 'fa-cart-plus'}"></i> ${po ? 'Pre-Order' : 'Keranjang'}
+            </button>`;
+        }
 
-            items.forEach(item => {
-                const isPO = item.category === 'pre-order' || item.category === 'po';
-                
-                // Badge Stok / PO
-                let badgeHTML = '';
-                if (isPO) {
-                    badgeHTML = `<span class="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1"><i class="fa-solid fa-clock text-[10px]"></i> Pre-Order</span>`;
-                } else if (item.stock <= 2) {
-                    badgeHTML = `<span class="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">Sisa ${item.stock} Unit</span>`;
-                } else {
-                    badgeHTML = `<span class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">Stok: ${item.stock}</span>`;
-                }
+        function renderProducts(items) {
+            const grid = $('productGrid');
+            $('productCount').textContent = `Menampilkan ${items.length} sepeda`;
+            $('emptyState').classList.toggle('hidden', items.length > 0);
+            grid.classList.toggle('hidden', items.length === 0);
 
-                // Image Element or SVG Placeholder
-                let imageElement = '';
-                if (item.image && item.image.trim() !== '') {
-                    imageElement = `<img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="this.onerror=null; this.parentElement.innerHTML='${getBikeSvg(item.category).replace(/'/g, "\\'")}';">`;
-                } else {
-                    imageElement = `<div class="transform group-hover:scale-110 transition duration-300">${getBikeSvg(item.category)}</div>`;
-                }
-
-                // Button Styling & Text based on PO
-                const btnBg = isPO 
-                    ? 'bg-amber-600 hover:bg-amber-500 active:bg-amber-700' 
-                    : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700';
-                
-                const btnIcon = isPO ? 'fa-clock' : 'fa-cart-plus';
-                const btnText = isPO ? 'Pre-Order' : '+ Keranjang';
-
-                const cardHtml = `
-                <div class="group bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden hover:border-gray-400 dark:hover:border-zinc-700 transition duration-200 flex flex-col justify-between shadow-sm hover:shadow-md">
-                    <div>
-                        <!-- Image Container -->
-                        <div class="relative bg-gray-100 dark:bg-zinc-950 p-4 flex items-center justify-center h-48 border-b border-gray-100 dark:border-zinc-800/60 overflow-hidden cursor-pointer" onclick="openModal(${item.id})">
-                            <span class="absolute top-3 left-3 bg-white/90 dark:bg-zinc-800/90 backdrop-blur text-[10px] font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-zinc-700 uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                                ${item.category}
-                            </span>
-                            
-                            <div class="absolute top-3 right-3">
-                                ${badgeHTML}
-                            </div>
-
-                            ${imageElement}
-
-                            <span class="absolute bottom-2 right-2 text-[10px] text-gray-400 bg-black/50 text-white px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition backdrop-blur-sm">
-                                <i class="fa-solid fa-expand mr-1"></i>Detail
-                            </span>
-                        </div>
-
-                        <!-- Card Body -->
-                        <div class="p-4">
-                            <h3 onclick="openModal(${item.id})" class="font-bold text-sm sm:text-base text-gray-900 dark:text-gray-100 group-hover:text-emerald-500 transition cursor-pointer line-clamp-1 mb-1">
-                                ${item.name}
-                            </h3>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">
-                                ${item.desc}
-                            </p>
-                        </div>
+            grid.innerHTML = items.map(item => `
+                <article class="group bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col shadow-sm hover:shadow-md transition">
+                    <button type="button" onclick="openModal(${item.id})" class="relative block aspect-square bg-white overflow-hidden" aria-label="Lihat detail ${esc(item.name)}">
+                        ${productImage(item, 'w-full h-full object-contain p-2 group-hover:scale-105 transition duration-300', 'w-16 h-16')}
+                        <span class="absolute top-2 left-2">${stockBadge(item)}</span>
+                    </button>
+                    <div class="p-3 sm:p-4 flex flex-col flex-1">
+                        <h3 onclick="openModal(${item.id})" class="font-bold text-[13px] sm:text-[15px] leading-snug line-clamp-2 min-h-[2.5em] cursor-pointer hover:text-emerald-600">${esc(item.name)}</h3>
+                        <p class="mt-1 text-sm sm:text-lg font-extrabold">${formatRupiah(item.price)}</p>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3">Min. beli ${MIN_QTY} unit</p>
+                        <div class="mt-auto">${buyButton(item)}</div>
                     </div>
+                </article>
+            `).join('');
+        }
 
-                    <!-- Card Footer Action -->
-                    <div class="p-4 pt-0">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="text-xs text-gray-400 font-medium">Harga:</span>
-                            <span class="text-base font-extrabold text-gray-900 dark:text-white">
-                                ${formatRupiah(item.price)}
-                            </span>
-                        </div>
-
-                        <div class="flex gap-2">
-                            <button onclick="addToCart(${item.id})" class="w-full py-2.5 px-3 ${btnBg} text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition">
-                                <i class="fa-solid ${btnIcon} text-sm"></i> ${btnText}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                `;
-                grid.innerHTML += cardHtml;
-            });
+        function renderCategoryBar() {
+            $('categoryBar').innerHTML = CATEGORIES.map(c => {
+                const active = c.id === currentCategory;
+                const cls = active
+                    ? (c.id === 'pre-order' ? 'bg-amber-500 text-white border-amber-500' : 'bg-black text-white border-black dark:bg-white dark:text-black dark:border-white')
+                    : 'bg-white dark:bg-zinc-900 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-zinc-800 hover:border-gray-400';
+                return `<button onclick="setCategory('${c.id}')" class="shrink-0 h-10 px-4 rounded-full border font-semibold whitespace-nowrap transition ${cls}">${c.label}</button>`;
+            }).join('');
         }
 
         function filterProducts() {
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const sort = document.getElementById('sortSelect').value;
+            const query = $('searchInput').value.trim().toLowerCase();
+            const sort = $('sortSelect').value;
 
-            let filtered = allProducts.filter(item => {
-                const matchesCat = (currentCategory === 'all') || (item.category === currentCategory);
-                const matchesSearch = item.name.toLowerCase().includes(query) || 
-                                      (item.category && item.category.toLowerCase().includes(query)) ||
-                                      (item.desc && item.desc.toLowerCase().includes(query));
-                return matchesCat && matchesSearch;
+            const filtered = allProducts.filter(item => {
+                const matchesCat = currentCategory === 'all' || item.category === currentCategory;
+                const haystack = `${item.name} ${item.category} ${item.desc}`.toLowerCase();
+                return matchesCat && haystack.includes(query);
             });
 
-            // Sorting
-            if (sort === 'price-low') {
-                filtered.sort((a,b) => a.price - b.price);
-            } else if (sort === 'price-high') {
-                filtered.sort((a,b) => b.price - a.price);
-            } else if (sort === 'name-asc') {
-                filtered.sort((a,b) => a.name.localeCompare(b.name));
-            }
+            if (sort === 'price-low') filtered.sort((a, b) => a.price - b.price);
+            else if (sort === 'price-high') filtered.sort((a, b) => b.price - a.price);
+            else if (sort === 'name-asc') filtered.sort((a, b) => a.name.localeCompare(b.name, 'id', { numeric: true }));
 
             renderProducts(filtered);
         }
 
         function setCategory(cat) {
             currentCategory = cat;
-            document.querySelectorAll('.cat-btn').forEach(btn => {
-                btn.className = 'cat-btn px-4 py-2 rounded-xl font-medium bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-zinc-800 hover:border-gray-400 whitespace-nowrap transition';
-            });
-
-            const activeBtn = document.getElementById(`cat-${cat}`);
-            if (activeBtn) {
-                if (cat === 'pre-order') {
-                    activeBtn.className = 'cat-btn px-4 py-2 rounded-xl font-bold bg-amber-500 text-white whitespace-nowrap transition shadow-sm flex items-center gap-1.5';
-                } else {
-                    activeBtn.className = 'cat-btn px-4 py-2 rounded-xl font-bold bg-black text-white dark:bg-white dark:text-black whitespace-nowrap transition shadow-sm';
-                }
-            }
+            renderCategoryBar();
             filterProducts();
         }
 
         function resetFilters() {
-            document.getElementById('searchInput').value = '';
+            $('searchInput').value = '';
+            $('sortSelect').value = 'default';
             setCategory('all');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         // ==========================================
-        // SHOPPING CART DRAWER & WA CHECKOUT LOGIC
+        // KERANJANG (min. 2 unit per jenis)
         // ==========================================
+        function saveCart() {
+            try { localStorage.setItem('asa-cart', JSON.stringify(shoppingCart)); } catch (e) {}
+        }
+
+        function loadCart() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('asa-cart') || '[]');
+                shoppingCart = saved
+                    .map(i => ({ id: i.id, qty: i.qty, product: findProduct(i.id) }))
+                    .filter(i => i.product && canBuy(i.product))
+                    .map(i => ({ id: i.id, qty: Math.min(Math.max(i.qty, MIN_QTY), maxQty(i.product)) }));
+            } catch (e) { shoppingCart = []; }
+        }
+
         function addToCart(productId) {
-            const product = allProducts.find(p => p.id === productId);
-            if (!product) return;
+            const product = findProduct(productId);
+            if (!product || !canBuy(product)) return;
 
-            const existingIndex = shoppingCart.findIndex(item => item.id === productId);
-            if (existingIndex > -1) {
-                shoppingCart[existingIndex].qty += 1;
+            const existing = shoppingCart.find(i => i.id === productId);
+            if (existing) {
+                if (existing.qty >= maxQty(product)) {
+                    showToast(`Stok "${product.name}" hanya ${product.stock} unit`, 'amber');
+                    return;
+                }
+                existing.qty += 1;
+                showToast(`${product.name} jadi ${existing.qty} unit`);
             } else {
-                shoppingCart.push({ id: productId, product: product, qty: 1 });
+                shoppingCart.push({ id: productId, qty: MIN_QTY });
+                showToast(`${MIN_QTY} unit ${product.name} masuk keranjang`);
             }
-
             updateCartUI();
-            showToast(`"${product.name}" ditambahkan ke keranjang!`);
         }
 
         function changeQty(productId, delta) {
-            const index = shoppingCart.findIndex(item => item.id === productId);
-            if (index > -1) {
-                shoppingCart[index].qty += delta;
-                if (shoppingCart[index].qty <= 0) {
-                    shoppingCart.splice(index, 1);
-                }
+            const item = shoppingCart.find(i => i.id === productId);
+            const product = findProduct(productId);
+            if (!item || !product) return;
+            const next = item.qty + delta;
+            if (next < MIN_QTY) {
+                showToast(`Minimal pembelian ${MIN_QTY} unit. Hapus item jika tidak jadi.`, 'amber');
+                return;
             }
+            if (next > maxQty(product)) {
+                showToast(`Stok hanya ${product.stock} unit`, 'amber');
+                return;
+            }
+            item.qty = next;
             updateCartUI();
         }
 
         function removeFromCart(productId) {
-            shoppingCart = shoppingCart.filter(item => item.id !== productId);
+            shoppingCart = shoppingCart.filter(i => i.id !== productId);
             updateCartUI();
         }
 
         function clearCart() {
+            if (!shoppingCart.length) return;
+            if (!confirm('Kosongkan semua isi keranjang?')) return;
             shoppingCart = [];
             updateCartUI();
         }
 
+        function cartTotals() {
+            return shoppingCart.reduce((t, i) => {
+                const p = findProduct(i.id);
+                if (p) { t.qty += i.qty; t.price += p.price * i.qty; }
+                return t;
+            }, { qty: 0, price: 0 });
+        }
+
         function updateCartUI() {
-            const totalQty = shoppingCart.reduce((sum, item) => sum + item.qty, 0);
-            const totalPrice = shoppingCart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
+            saveCart();
+            const { qty, price } = cartTotals();
 
-            // Update Badges
-            document.getElementById('cartBadge').innerText = totalQty;
-            document.getElementById('drawerCartCount').innerText = `${totalQty} Item`;
-            document.getElementById('cartTotalPrice').innerText = formatRupiah(totalPrice);
+            $('cartBadge').textContent = qty;
+            $('drawerCartCount').textContent = `${qty} unit`;
+            $('cartTotalPrice').textContent = formatRupiah(price);
+            $('mobileCartQty').textContent = `${qty} unit`;
+            $('mobileCartTotal').textContent = formatRupiah(price);
+            $('mobileCartBar').classList.toggle('hidden', qty === 0);
+            $('checkoutForm').classList.toggle('hidden', qty === 0);
 
-            // Render Drawer Cart Items
-            const container = document.getElementById('cartItemsContainer');
-            container.innerHTML = '';
-
-            if (shoppingCart.length === 0) {
+            const container = $('cartItemsContainer');
+            if (!shoppingCart.length) {
                 container.innerHTML = `
                     <div class="text-center py-12 text-gray-400">
                         <i class="fa-solid fa-basket-shopping text-4xl mb-3 text-gray-300 dark:text-zinc-700"></i>
-                        <p class="text-xs font-semibold">Keranjang belanja Anda masih kosong.</p>
-                        <p class="text-[11px] text-gray-500 mt-1">Pilih sepeda di katalog dan klik "+ Keranjang".</p>
-                    </div>
-                `;
+                        <p class="text-sm font-semibold">Keranjang masih kosong</p>
+                        <p class="text-xs text-gray-500 mt-1">Pilih sepeda lalu tekan tombol "Keranjang".</p>
+                    </div>`;
                 return;
             }
 
-            shoppingCart.forEach(item => {
-                const isPO = item.product.category === 'pre-order' || item.product.category === 'po';
-                const subtotal = item.product.price * item.qty;
-
-                const poLabel = isPO ? `<span class="text-[10px] text-amber-500 font-bold ml-1">[PO]</span>` : '';
-
-                const itemHtml = `
-                <div class="p-3 bg-gray-50 dark:bg-zinc-800/60 rounded-xl border border-gray-200 dark:border-zinc-800 flex items-center justify-between gap-3">
+            container.innerHTML = shoppingCart.map(item => {
+                const p = findProduct(item.id);
+                if (!p) return '';
+                const atMin = item.qty <= MIN_QTY;
+                const atMax = item.qty >= maxQty(p);
+                return `
+                <div class="p-3 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50 flex gap-3">
+                    <div class="w-16 h-16 shrink-0 rounded-xl bg-white overflow-hidden">
+                        ${productImage(p, 'w-full h-full object-contain', 'w-8 h-8')}
+                    </div>
                     <div class="flex-1 min-w-0">
-                        <h4 class="font-bold text-xs text-gray-900 dark:text-gray-100 truncate flex items-center">
-                            ${item.product.name} ${poLabel}
-                        </h4>
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400">
-                            ${formatRupiah(item.product.price)} x ${item.qty}
-                        </p>
-                        <p class="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                            Subtotal: ${formatRupiah(subtotal)}
-                        </p>
+                        <div class="flex items-start justify-between gap-2">
+                            <h4 class="font-bold text-sm leading-snug line-clamp-2">${esc(p.name)} ${isPO(p) ? '<span class="text-[10px] text-amber-600 font-bold">[PO]</span>' : ''}</h4>
+                            <button onclick="removeFromCart(${item.id})" aria-label="Hapus" class="w-8 h-8 -mt-1 -mr-1 shrink-0 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center justify-center">
+                                <i class="fa-solid fa-trash-can text-sm"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">${formatRupiah(p.price)} / unit</p>
+                        <div class="mt-2 flex items-center justify-between gap-2">
+                            <div class="flex items-center rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                                <button onclick="changeQty(${item.id}, -1)" aria-label="Kurangi" class="w-9 h-9 flex items-center justify-center ${atMin ? 'text-gray-300 dark:text-zinc-700' : 'text-gray-700 dark:text-gray-200'}">
+                                    <i class="fa-solid fa-minus text-xs"></i>
+                                </button>
+                                <span class="w-8 text-center text-sm font-bold">${item.qty}</span>
+                                <button onclick="changeQty(${item.id}, 1)" aria-label="Tambah" class="w-9 h-9 flex items-center justify-center ${atMax ? 'text-gray-300 dark:text-zinc-700' : 'text-gray-700 dark:text-gray-200'}">
+                                    <i class="fa-solid fa-plus text-xs"></i>
+                                </button>
+                            </div>
+                            <p class="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">${formatRupiah(p.price * item.qty)}</p>
+                        </div>
+                        ${atMin ? `<p class="text-[11px] text-gray-400 mt-1">Minimal ${MIN_QTY} unit</p>` : ''}
                     </div>
-
-                    <!-- Quantity Control Buttons -->
-                    <div class="flex items-center gap-1.5 bg-white dark:bg-zinc-900 p-1 rounded-lg border border-gray-200 dark:border-zinc-700">
-                        <button onclick="changeQty(${item.id}, -1)" class="w-6 h-6 rounded flex items-center justify-center text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800">
-                            <i class="fa-solid fa-minus text-[10px]"></i>
-                        </button>
-                        <span class="text-xs font-bold w-5 text-center">${item.qty}</span>
-                        <button onclick="changeQty(${item.id}, 1)" class="w-6 h-6 rounded flex items-center justify-center text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800">
-                            <i class="fa-solid fa-plus text-[10px]"></i>
-                        </button>
-                    </div>
-
-                    <!-- Trash Button -->
-                    <button onclick="removeFromCart(${item.id})" class="text-red-400 hover:text-red-600 p-1">
-                        <i class="fa-solid fa-xmark text-sm"></i>
-                    </button>
-                </div>
-                `;
-                container.innerHTML += itemHtml;
-            });
-        }
-
-        function toggleCartDrawer() {
-            const drawer = document.getElementById('cartDrawer');
-            drawer.classList.toggle('hidden');
-        }
-
-        function sendOrderToWhatsApp() {
-            if (shoppingCart.length === 0) {
-                showToast('Keranjang Anda masih kosong!', 'amber');
-                return;
-            }
-
-            const name = document.getElementById('customerName').value.trim() || 'Pelanggan';
-            const notes = document.getElementById('customerNotes').value.trim() || '-';
-            const totalPrice = shoppingCart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
-
-            let itemDetails = '';
-            shoppingCart.forEach((item, index) => {
-                const isPO = item.product.category === 'pre-order' || item.product.category === 'po';
-                const poTag = isPO ? ' *[PRE-ORDER]*' : '';
-                const subtotal = item.product.price * item.qty;
-
-                itemDetails += `${index + 1}. *${item.product.name}*${poTag}\n   - Jml: ${item.qty} unit\n   - Subtotal: ${formatRupiah(subtotal)}\n\n`;
-            });
-
-            const rawMessage = 
-`Halo *Sepeda Agung Jaya*, saya ingin memesan sepeda berikut:
-
-📋 *RINCIAN PESANAN:*
-${itemDetails}💵 *TOTAL KESELURUHAN:* ${formatRupiah(totalPrice)}
-
-👤 *Nama Pemesan:* ${name}
-📍 *Alamat / Catatan:* ${notes}
-
-Mohon konfirmasi ketersediaan stok & metode pembayarannya. Terima kasih!`;
-
-            const waUrl = `https://wa.me/${storeWANumber}?text=${encodeURIComponent(rawMessage)}`;
-            window.open(waUrl, '_blank');
+                </div>`;
+            }).join('');
         }
 
         // ==========================================
-        // MODALS & NOTIFICATION TOASTS
+        // BUKA / TUTUP PANEL
         // ==========================================
+        function lockScroll(lock) { document.body.style.overflow = lock ? 'hidden' : ''; }
+        function openCart() { $('cartDrawer').classList.remove('hidden'); lockScroll(true); }
+        function closeCart() { $('cartDrawer').classList.add('hidden'); lockScroll(false); }
+
         function openModal(id) {
-            const item = allProducts.find(p => p.id === id);
+            const item = findProduct(id);
             if (!item) return;
+            const catLabel = (CATEGORIES.find(c => c.id === item.category) || { label: item.category }).label;
 
-            const isPO = item.category === 'pre-order' || item.category === 'po';
-            const btnBg = isPO ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500';
-            const btnText = isPO ? 'Pre-Order Sekarang' : '+ Tambah ke Keranjang';
-
-            const modalHtml = `
-                <div class="bg-gray-100 dark:bg-zinc-950 p-6 flex items-center justify-center border-b border-gray-200 dark:border-zinc-800">
-                    ${item.image ? `<img src="${item.image}" class="max-h-48 rounded-xl object-contain">` : getBikeSvg(item.category)}
+            $('modalContent').innerHTML = `
+                <div class="bg-white aspect-[4/3] flex items-center justify-center border-b border-gray-200 dark:border-zinc-800">
+                    ${productImage(item, 'w-full h-full object-contain p-3', 'w-24 h-24')}
                 </div>
-                <div class="p-6">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="text-[10px] font-bold px-2.5 py-0.5 rounded bg-blue-500/10 text-blue-500 uppercase">${item.category}</span>
-                        ${isPO ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-500">Pre-Order</span>` : `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500">Stok: ${item.stock}</span>`}
+                <div class="p-5 pb-safe">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-zinc-800 uppercase">${esc(catLabel)}</span>
+                        ${stockBadge(item)}
                     </div>
-
-                    <h3 class="text-xl font-extrabold mb-1">${item.name}</h3>
-                    <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mb-4">${formatRupiah(item.price)}</p>
-
-                    <p class="text-xs text-gray-600 dark:text-gray-300 mb-6 leading-relaxed bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-gray-100 dark:border-zinc-800">
-                        ${item.desc}
-                    </p>
-
+                    <h3 class="text-xl font-extrabold mb-1">${esc(item.name)}</h3>
+                    <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400">${formatRupiah(item.price)}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Minimal pembelian ${MIN_QTY} unit</p>
+                    ${item.desc ? `<p class="text-sm text-gray-600 dark:text-gray-300 mb-5 leading-relaxed bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-xl">${esc(item.desc)}</p>` : ''}
                     <div class="flex gap-2">
-                        <button onclick="closeModal()" class="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-xs font-semibold hover:bg-gray-100 dark:hover:bg-zinc-800">
-                            Tutup
-                        </button>
-                        <button onclick="addToCart(${item.id}); closeModal();" class="flex-2 py-2.5 px-4 ${btnBg} text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md">
-                            <i class="fa-solid fa-cart-plus"></i> ${btnText}
-                        </button>
+                        <button onclick="closeModal()" class="h-10 px-5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold hover:bg-gray-100 dark:hover:bg-zinc-800">Tutup</button>
+                        <div class="flex-1" onclick="if(!event.target.closest('button[disabled]')) closeModal()">${buyButton(item)}</div>
                     </div>
-                </div>
-            `;
-
-            document.getElementById('modalContent').innerHTML = modalHtml;
-            document.getElementById('detailModal').classList.remove('hidden');
+                </div>`;
+            $('detailModal').classList.remove('hidden');
+            lockScroll(true);
         }
 
         function closeModal() {
-            document.getElementById('detailModal').classList.add('hidden');
+            $('detailModal').classList.add('hidden');
+            lockScroll(!$('cartDrawer').classList.contains('hidden'));
         }
 
-        function toggleWAConfigModal() {
-            document.getElementById('waConfigModal').classList.toggle('hidden');
-        }
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            if (!$('detailModal').classList.contains('hidden')) closeModal();
+            else if (!$('cartDrawer').classList.contains('hidden')) closeCart();
+        });
 
-        function saveWANumber() {
-            const inputVal = document.getElementById('waNumberInput').value.trim();
-            if (inputVal) {
-                storeWANumber = inputVal;
-                toggleWAConfigModal();
-                showToast(`Nomor WA Toko berhasil disimpan: ${storeWANumber}`);
+        // ==========================================
+        // KIRIM PESANAN KE WHATSAPP
+        // ==========================================
+        function sendOrderToWhatsApp() {
+            if (!shoppingCart.length) {
+                showToast('Keranjang masih kosong!', 'amber');
+                return;
             }
+            const nameInput = $('customerName');
+            const name = nameInput.value.trim();
+            if (!name) {
+                showToast('Mohon isi nama Anda dulu', 'amber');
+                nameInput.focus();
+                return;
+            }
+            const notes = $('customerNotes').value.trim() || '-';
+            const { price } = cartTotals();
+
+            const itemDetails = shoppingCart.map((item, i) => {
+                const p = findProduct(item.id);
+                const poTag = isPO(p) ? ' *[PRE-ORDER]*' : '';
+                return `${i + 1}. *${p.name}*${poTag}\n   Jumlah: ${item.qty} unit x ${formatRupiah(p.price)}\n   Subtotal: ${formatRupiah(p.price * item.qty)}`;
+            }).join('\n\n');
+
+            const message =
+`Halo *${STORE_NAME}*, saya ingin memesan:
+
+📋 *RINCIAN PESANAN*
+${itemDetails}
+
+💵 *TOTAL: ${formatRupiah(price)}*
+
+👤 Nama: ${name}
+📍 Alamat / Catatan: ${notes}
+
+Mohon konfirmasi ketersediaan stok & cara pembayarannya. Terima kasih!`;
+
+            window.open(`https://wa.me/${STORE_WA_NUMBER}?text=${encodeURIComponent(message)}`, '_blank');
         }
 
+        // ==========================================
+        // TOAST & TEMA
+        // ==========================================
         function showToast(message, type = 'emerald') {
-            const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
-            
-            const bgColor = type === 'amber' ? 'bg-amber-600' : 'bg-emerald-600';
+            const bg = type === 'amber' ? 'bg-amber-600' : 'bg-emerald-600';
+            const icon = type === 'amber' ? 'fa-circle-exclamation' : 'fa-circle-check';
+            toast.className = `animate-fade ${bg} text-white text-sm font-semibold px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 max-w-sm w-full sm:w-auto`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span></span>`;
+            toast.querySelector('span').textContent = message;
+            $('toastContainer').replaceChildren(toast); // tampilkan satu notifikasi saja agar tidak menumpuk
+            setTimeout(() => toast.remove(), 2600);
+        }
 
-            toast.className = `${bgColor} text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 pointer-events-auto animate-bounce`;
-            toast.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>${message}</span>`;
-
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.remove();
-            }, 3000);
+        function syncThemeIcon() {
+            const dark = document.documentElement.classList.contains('dark');
+            $('themeIcon').className = dark ? 'fa-solid fa-sun text-amber-400' : 'fa-solid fa-moon';
+            document.querySelector('meta[name="theme-color"]').content = dark ? '#09090b' : '#ffffff';
         }
 
         function toggleTheme() {
-            const html = document.documentElement;
-            const icon = document.getElementById('themeIcon');
-            if (html.classList.contains('dark')) {
-                html.classList.remove('dark');
-                icon.className = 'fa-solid fa-sun text-amber-500';
-            } else {
-                html.classList.add('dark');
-                icon.className = 'fa-solid fa-moon text-gray-300';
-            }
+            const dark = document.documentElement.classList.toggle('dark');
+            try { localStorage.setItem('asa-theme', dark ? 'dark' : 'light'); } catch (e) {}
+            syncThemeIcon();
         }
 
-        // Initialize App
-        window.onload = function() {
-            loadProducts();
-            updateCartUI();
-        };
+        // ==========================================
+        // MULAI
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            $('year').textContent = new Date().getFullYear();
+            $('footerWA').href = `https://wa.me/${STORE_WA_NUMBER}`;
+            $('footerWAText').textContent = STORE_WA_DISPLAY;
+            syncThemeIcon();
+            renderCategoryBar();
+            loadProducts(); // keranjang tersimpan dimuat setelah data produk siap
+        });
     </script>
 </body>
 </html>
