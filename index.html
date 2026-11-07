@@ -225,7 +225,14 @@
                         <p class="text-[11px] text-gray-400 mt-1">Sesuai data pelanggan. Hubungi toko untuk mengubah.</p>
                         <p id="customerNameError" class="hidden text-xs text-red-500 mt-1">Nama wajib diisi</p>
                     </div>
-                    <div>
+                    <!-- Alamat dari data toko (tidak perlu diisi customer) -->
+                    <div id="addressFixedBox" class="hidden">
+                        <p class="block text-xs font-semibold mb-1">Alamat pengiriman</p>
+                        <p id="addressFixed" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-100 dark:bg-zinc-800/60 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line"></p>
+                        <p class="text-[11px] text-gray-400 mt-1">Sesuai data pelanggan. Hubungi toko untuk mengubah.</p>
+                    </div>
+                    <!-- Hanya muncul jika alamat belum diisi toko -->
+                    <div id="addressInputBox">
                         <label for="customerAddress" class="block text-xs font-semibold mb-1">Alamat pengiriman <span class="text-red-500">*</span></label>
                         <textarea id="customerAddress" rows="3" autocomplete="street-address" maxlength="400" oninput="clearFieldError(this)" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"></textarea>
                         <p id="customerAddressError" class="hidden text-xs text-red-500 mt-1">Alamat wajib diisi</p>
@@ -276,8 +283,8 @@
             <h2 id="loginTitle" class="text-lg font-extrabold text-center">Masuk pelanggan</h2>
             <p class="text-sm text-gray-500 dark:text-gray-400 text-center mb-5">Untuk melihat harga dan memesan</p>
 
-            <label for="loginPhone" class="block text-xs font-semibold mb-1">Nomor WhatsApp</label>
-            <input type="tel" id="loginPhone" inputmode="tel" autocomplete="tel" placeholder="0812 3456 7890" maxlength="20"
+            <label for="loginUsername" class="block text-xs font-semibold mb-1">Username</label>
+            <input type="text" id="loginUsername" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Username dari toko" maxlength="50"
                 class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3">
 
             <label for="loginPin" class="block text-xs font-semibold mb-1">PIN dari toko (4 angka)</label>
@@ -291,7 +298,7 @@
                 Masuk
             </button>
             <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
-                Belum terdaftar atau lupa PIN?
+                Belum punya akun atau lupa PIN?
                 <a id="registerLink" href="#" target="_blank" rel="noopener" class="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">Hubungi toko via WhatsApp</a>
             </p>
         </form>
@@ -934,7 +941,11 @@ Mohon konfirmasi ketersediaan stok & cara pembayarannya. Terima kasih!`;
             // Isi otomatis data pemesan
             if (logged) {
                 $('customerName').value = currentCustomer.nama || '';
-                if (!$('customerAddress').value.trim()) $('customerAddress').value = currentCustomer.alamat || '';
+                const alamat = (currentCustomer.alamat || '').trim();
+                $('addressFixedBox').classList.toggle('hidden', !alamat);
+                $('addressInputBox').classList.toggle('hidden', !!alamat);
+                $('addressFixed').textContent = alamat;
+                if (alamat) $('customerAddress').value = alamat;
             }
         }
 
@@ -942,7 +953,7 @@ Mohon konfirmasi ketersediaan stok & cara pembayarannya. Terima kasih!`;
             $('loginError').classList.add('hidden');
             $('loginModal').classList.remove('hidden');
             lockScroll(true);
-            setTimeout(() => $('loginPhone').focus(), 50);
+            setTimeout(() => $('loginUsername').focus(), 50);
         }
 
         function closeLogin() {
@@ -957,16 +968,16 @@ Mohon konfirmasi ketersediaan stok & cara pembayarannya. Terima kasih!`;
 
         async function submitLogin(e) {
             e.preventDefault();
-            const phone = $('loginPhone').value.trim();
+            const username = $('loginUsername').value.trim();
             const pin = $('loginPin').value.trim();
-            if (phone.replace(/\D/g, '').length < 9) return showLoginError('Masukkan nomor WhatsApp yang benar');
+            if (!username) return showLoginError('Masukkan username');
             if (!/^\d{4}$/.test(pin)) return showLoginError('PIN harus 4 angka');
 
             const btn = $('loginSubmit');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memeriksa...';
             try {
-                const result = await callScript({ action: 'login', phone, pin });
+                const result = await callScript({ action: 'login', username, pin });
                 if (!result.ok) {
                     showLoginError(result.message || 'Gagal masuk. Coba lagi.');
                     return;

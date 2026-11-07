@@ -4,7 +4,7 @@
  * Dipasang di Google Sheets katalog (Extensions > Apps Script).
  *
  *  - GET                      : katalog publik (TANPA harga)
- *  - POST {action:'login'}    : login pelanggan (nomor WA + PIN) -> token sesi 30 hari
+ *  - POST {action:'login'}    : login pelanggan (username + PIN) -> token sesi 30 hari
  *  - POST {action:'products'} : katalog lengkap dengan harga (butuh token)
  *  - POST {action:'logout'}   : hapus token
  *  - POST {action:'order'}    : cek & kurangi stok, catat ke tab "Pesanan" (butuh token)
@@ -12,7 +12,7 @@
  * Tab produk (tab paling kiri, baris 1 = judul, urutan kolom bebas):
  *   id | name | price | stock | category | image | keterangan
  * Tab "Pelanggan" (dibuat otomatis kalau belum ada):
- *   nama | no_wa | pin | alamat | aktif
+ *   nama | username | pin | alamat | no_wa (opsional) | aktif
  */
 
 const PRODUCT_SHEET_NAME = ''; // kosongkan = pakai sheet (tab) paling kiri
@@ -72,27 +72,27 @@ function productsForToken_(token) {
 // ---------- login ----------
 
 function login_(body) {
-  const phone = normalizePhone_(body.phone);
+  const username = normalizeUsername_(body.username);
   const pin = String(body.pin || '').replace(/\D/g, '');
-  if (phone.length < 9 || pin.length !== 4) {
-    return { ok: false, error: 'invalid', message: 'Isi nomor WhatsApp dan PIN 4 angka' };
+  if (!username || pin.length !== 4) {
+    return { ok: false, error: 'invalid', message: 'Isi username dan PIN 4 angka' };
   }
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
     const cache = CacheService.getScriptCache();
-    const failKey = 'fail_' + phone;
+    const failKey = 'fail_' + username;
     const fails = Number(cache.get(failKey)) || 0;
     if (fails >= MAX_LOGIN_FAILS) {
       return { ok: false, error: 'locked', message: 'Terlalu banyak percobaan. Coba lagi ' + LOCK_MINUTES + ' menit lagi.' };
     }
 
-    const customer = findCustomer_(phone);
+    const customer = findCustomer_(username);
     if (!customer || customer.pin !== pin) {
       cache.put(failKey, String(fails + 1), LOCK_MINUTES * 60);
       const left = MAX_LOGIN_FAILS - fails - 1;
-      return { ok: false, error: 'wrong', message: left > 0 ? 'Nomor atau PIN salah. Sisa ' + left + ' percobaan.' : 'Terlalu banyak percobaan. Coba lagi ' + LOCK_MINUTES + ' menit lagi.' };
+      return { ok: false, error: 'wrong', message: left > 0 ? 'Username atau PIN salah. Sisa ' + left + ' percobaan.' : 'Terlalu banyak percobaan. Coba lagi ' + LOCK_MINUTES + ' menit lagi.' };
     }
     if (!customer.aktif) {
       return { ok: false, error: 'inactive', message: 'Akun Anda tidak aktif. Hubungi toko.' };
@@ -102,7 +102,7 @@ function login_(body) {
     const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
     const props = PropertiesService.getScriptProperties();
     cleanupSessions_(props);
-    props.setProperty('sess_' + token, JSON.stringify({ phone: phone, exp: Date.now() + SESSION_DAYS * 864e5 }));
+    props.setProperty('sess_' + token, JSON.stringify({ username: username, exp: Date.now() + SESSION_DAYS * 864e5 }));
     return { ok: true, token: token, customer: { nama: customer.nama, alamat: customer.alamat } };
   } finally {
     lock.releaseLock();
@@ -123,7 +123,8 @@ function customerFromToken_(token) {
   if (!raw) return null;
   const sess = JSON.parse(raw);
   if (sess.exp < Date.now()) { props.deleteProperty('sess_' + token); return null; }
-  const customer = findCustomer_(sess.phone);
+  if (!sess.username) { props.deleteProperty('sess_' + token); return null; } // sesi versi lama (nomor WA)
+  const customer = findCustomer_(sess.username);
   if (!customer || !customer.aktif) return null;
   return customer;
 }
@@ -136,39 +137,40 @@ function cleanupSessions_(props) {
   });
 }
 
-// 0812..., 62812..., +62 812-... -> 0812...
-function normalizePhone_(s) {
-  let d = String(s || '').replace(/\D/g, '');
-  if (d.indexOf('62') === 0) d = '0' + d.slice(2);
-  else if (d.indexOf('8') === 0) d = '0' + d;
-  return d;
+// Username tidak membedakan huruf besar/kecil dan spasi di awal/akhir
+function normalizeUsername_(s) {
+  return String(s || '').trim().toLowerCase().slice(0, 50);
 }
+
+const CUSTOMER_COLUMNS = ['nama', 'username', 'pin', 'alamat', 'no_wa', 'aktif'];
 
 function customerSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(CUSTOMER_SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(CUSTOMER_SHEET_NAME, ss.getNumSheets());
-    sh.appendRow(['nama', 'no_wa', 'pin', 'alamat', 'aktif']);
-    sh.getRange('B:C').setNumberFormat('@'); // simpan sebagai teks supaya angka 0 di depan tidak hilang
+    sh.appendRow(CUSTOMER_COLUMNS);
     sh.setFrozenRows(1);
   }
   return sh;
 }
 
-function findCustomer_(phone) {
+function findCustomer_(username) {
   const values = customerSheet_().getDataRange().getValues();
   const header = values[0].map(h => String(h).trim().toLowerCase());
   const c = name => header.indexOf(name);
+  const get = (v, name) => (c(name) >= 0 ? String(v[c(name)] || '').trim() : '');
+  if (c('username') < 0) return null;
   for (let i = 1; i < values.length; i++) {
     const v = values[i];
-    if (normalizePhone_(v[c('no_wa')]) !== phone) continue;
-    const aktifText = String(v[c('aktif')] || '').trim().toLowerCase();
+    if (normalizeUsername_(v[c('username')]) !== username) continue;
+    const aktifText = get(v, 'aktif').toLowerCase();
     return {
-      nama: String(v[c('nama')] || '').trim(),
-      phone: phone,
-      pin: String(v[c('pin')] || '').replace(/\D/g, '').padStart(4, '0'),
-      alamat: c('alamat') >= 0 ? String(v[c('alamat')] || '').trim() : '',
+      nama: get(v, 'nama'),
+      username: username,
+      pin: get(v, 'pin').replace(/\D/g, '').padStart(4, '0'),
+      alamat: get(v, 'alamat'),
+      noWa: get(v, 'no_wa'),
       aktif: ['tidak', 'no', 'false', '0', 'nonaktif'].indexOf(aktifText) < 0
     };
   }
@@ -182,7 +184,8 @@ function order_(order) {
   if (!customer) return { ok: false, error: 'auth', message: 'Silakan masuk lagi' };
 
   const name = customer.nama || clean_(order.name, 100);
-  const address = clean_(order.address, 400);
+  // Alamat dari tab Pelanggan; hanya pakai isian customer jika di sheet kosong
+  const address = customer.alamat || clean_(order.address, 400);
   const notes = clean_(order.notes, 400);
   if (!name || !address) return { ok: false, error: 'invalid', message: 'Nama dan alamat wajib diisi' };
   if (!Array.isArray(order.items) || order.items.length === 0 || order.items.length > 50) {
@@ -227,7 +230,7 @@ function order_(order) {
     const orderId = nextOrderId_(now);
     const itemText = lines.map(l => l.qty + 'x ' + l.p.name + (l.po ? ' [PO]' : '')).join('\n');
 
-    orderSheet_().appendRow([now, orderId, name, address, notes, itemText, total, 'Baru', "'" + customer.phone]);
+    orderSheet_().appendRow([now, orderId, name, address, notes, itemText, total, 'Baru', customer.username, customer.noWa ? "'" + customer.noWa : '']);
 
     return { ok: true, orderId: orderId, total: total, customer: { nama: name } };
   } finally {
@@ -264,12 +267,29 @@ function resetNomorPesananBulanIni() {
 
 /**
  * Jalankan manual sekali setelah memasang skrip ini:
- * membuat tab "Pelanggan" (kalau belum ada) dan judul kolom "No. WA" di tab Pesanan.
+ * membuat tab "Pelanggan" (kalau belum ada), menambahkan kolom yang belum ada
+ * (misalnya "username"), dan judul kolom tambahan di tab Pesanan.
+ * Data yang sudah ada tidak dihapus.
  */
 function siapkanSheet() {
-  customerSheet_();
+  const cs = customerSheet_();
+  const lastCol = Math.max(cs.getLastColumn(), 1);
+  const header = cs.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim().toLowerCase());
+  let next = header.filter(h => h).length + 1;
+  CUSTOMER_COLUMNS.forEach(col => {
+    if (header.indexOf(col) < 0) cs.getRange(1, next++).setValue(col);
+  });
+  // Simpan pin & no_wa sebagai teks supaya angka 0 di depan tidak hilang
+  const newHeader = cs.getRange(1, 1, 1, next - 1).getValues()[0].map(h => String(h).trim().toLowerCase());
+  ['pin', 'no_wa'].forEach(col => {
+    const i = newHeader.indexOf(col);
+    if (i >= 0) cs.getRange(1, i + 1, cs.getMaxRows(), 1).setNumberFormat('@');
+  });
+
   const sh = orderSheet_();
-  if (!String(sh.getRange(1, 9).getValue()).trim()) sh.getRange(1, 9).setValue('No. WA');
+  const h9 = String(sh.getRange(1, 9).getValue()).trim();
+  if (!h9 || h9 === 'No. WA') sh.getRange(1, 9).setValue('Username');
+  if (!String(sh.getRange(1, 10).getValue()).trim()) sh.getRange(1, 10).setValue('No. WA');
 }
 
 /**
@@ -327,7 +347,7 @@ function orderSheet_() {
   let sh = ss.getSheetByName(ORDER_SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(ORDER_SHEET_NAME, ss.getNumSheets());
-    sh.appendRow(['Waktu', 'No. Pesanan', 'Nama', 'Alamat', 'Catatan', 'Barang', 'Total', 'Status', 'No. WA']);
+    sh.appendRow(['Waktu', 'No. Pesanan', 'Nama', 'Alamat', 'Catatan', 'Barang', 'Total', 'Status', 'Username', 'No. WA']);
     sh.setFrozenRows(1);
   }
   return sh;
