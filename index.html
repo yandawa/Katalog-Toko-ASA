@@ -39,18 +39,21 @@
         @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
         .animate-drawer { animation: slideUp .28s ease-out; }
         @media (min-width: 640px) { .animate-drawer { animation: slideInRight .28s ease-out; } }
         .animate-fade { animation: fadeIn .2s ease-out; }
+        .animate-shake { animation: shake .3s ease-in-out 2; }
         /* Input >= 16px supaya iPhone tidak auto-zoom saat mengetik */
         input, textarea, select { font-size: 16px; }
+        .field-error { border-color: #ef4444 !important; box-shadow: 0 0 0 2px rgba(239, 68, 68, .25); }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900 dark:bg-zinc-950 dark:text-gray-100 min-h-screen transition-colors duration-200">
 
     <!-- INFO BAR -->
     <div class="bg-black text-white dark:bg-white dark:text-black text-[11px] sm:text-xs py-2 px-4 text-center font-semibold">
-        <i class="fa-solid fa-circle-info mr-1"></i> Minimal pembelian <b>2 unit</b> untuk setiap jenis sepeda
+        <i class="fa-solid fa-circle-info mr-1"></i> Minimal pembelian <b>2 unit</b> per jenis sepeda (kecuali stok tinggal 1)
     </div>
 
     <!-- NAVBAR -->
@@ -104,7 +107,7 @@
             <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <div class="relative flex-1">
                     <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                    <input type="search" id="searchInput" oninput="filterProducts()" placeholder="Cari sepeda (BMX, MTB, Labubu...)" autocomplete="off"
+                    <input type="search" id="searchInput" oninput="filterProducts()" placeholder="Cari sepeda (BMX, MTB, warna...)" autocomplete="off"
                         class="w-full h-11 pl-10 pr-4 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-gray-400 transition">
                 </div>
                 <select id="sortSelect" onchange="filterProducts()" aria-label="Urutkan"
@@ -181,13 +184,25 @@
                 </button>
             </div>
 
-            <div class="flex-1 overflow-y-auto overscroll-contain">
+            <div id="cartScroll" class="flex-1 overflow-y-auto overscroll-contain">
                 <div id="cartItemsContainer" class="p-4 space-y-3"></div>
 
                 <div id="checkoutForm" class="px-4 pb-4 space-y-3">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400"><i class="fa-solid fa-user-pen mr-1"></i> Data Pemesan</h4>
-                    <input type="text" id="customerName" placeholder="Nama lengkap *" autocomplete="name" class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    <textarea id="customerNotes" rows="3" placeholder="Alamat pengiriman / catatan (warna, dll)" autocomplete="street-address" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"></textarea>
+                    <div>
+                        <label for="customerName" class="block text-xs font-semibold mb-1">Nama lengkap <span class="text-red-500">*</span></label>
+                        <input type="text" id="customerName" autocomplete="name" maxlength="100" oninput="clearFieldError(this)" class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <p id="customerNameError" class="hidden text-xs text-red-500 mt-1">Nama wajib diisi</p>
+                    </div>
+                    <div>
+                        <label for="customerAddress" class="block text-xs font-semibold mb-1">Alamat pengiriman <span class="text-red-500">*</span></label>
+                        <textarea id="customerAddress" rows="3" autocomplete="street-address" maxlength="400" oninput="clearFieldError(this)" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"></textarea>
+                        <p id="customerAddressError" class="hidden text-xs text-red-500 mt-1">Alamat wajib diisi</p>
+                    </div>
+                    <div>
+                        <label for="customerNotes" class="block text-xs font-semibold mb-1">Catatan <span class="text-gray-400 font-normal">(opsional)</span></label>
+                        <input type="text" id="customerNotes" maxlength="400" placeholder="Misal: warna, waktu kirim" class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
                 </div>
             </div>
 
@@ -201,7 +216,7 @@
                         <i class="fa-solid fa-trash-can"></i> Kosongkan
                     </button>
                 </div>
-                <button onclick="sendOrderToWhatsApp()" class="w-full h-12 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-md transition">
+                <button id="sendOrderBtn" onclick="sendOrderToWhatsApp()" class="w-full h-12 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-60 disabled:cursor-wait text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-md transition">
                     <i class="fa-brands fa-whatsapp text-xl"></i> Kirim Pesanan via WhatsApp
                 </button>
             </div>
@@ -229,10 +244,15 @@
         const STORE_NAME = 'ASA Bike Shop';
         const STORE_WA_NUMBER = '6285111418200'; // 0851-1141-8200 (format internasional, tanpa 0 di depan)
         const STORE_WA_DISPLAY = '0851-1141-8200';
-        const MIN_QTY = 2; // minimal pembelian per jenis sepeda
+        const MIN_QTY = 2;       // minimal pembelian per jenis sepeda (jika stok >= 2)
         const PO_MAX_QTY = 99;
 
-        // Link CSV publik Google Sheets (kolom: id, name, price, stock, category, image, desc)
+        // Link Web App dari Google Apps Script (lihat folder apps-script/).
+        // Jika diisi: data produk diambil langsung dari sheet & stok otomatis berkurang saat pesanan dikirim.
+        // Jika kosong: data diambil dari CSV publik di bawah, stok tidak berubah otomatis.
+        const APPS_SCRIPT_URL = '';
+
+        // Link CSV publik Google Sheets (kolom: id, name, price, stock, category, image, keterangan)
         const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRlcQPHDkd2lbexP4kaTwZqndkTyNry3yC1jCnuu2n4i3MXTd_ar3v8Y2Z4Kp4BhC9ykvBJj6Xpn0O2/pub?output=csv';
 
         const CATEGORIES = [
@@ -271,7 +291,7 @@
             { id: 20, name: '24" MTB Velion', price: 1055000, stock: 5, category: 'mtb' },
             { id: 21, name: '26" MTB Velion', price: 1080000, stock: 5, category: 'mtb' },
             { id: 22, name: '27.5" MTB Foster', price: 1125000, stock: 5, category: 'mtb' }
-        ].map(p => ({ image: '', desc: '', ...p }));
+        ].map(p => ({ image: '', keterangan: '', ...p }));
 
         // ==========================================
         // HELPER
@@ -289,8 +309,11 @@
 
         const isPO = p => p.category === 'pre-order' || p.category === 'po';
         const maxQty = p => isPO(p) ? PO_MAX_QTY : p.stock;
-        const canBuy = p => maxQty(p) >= MIN_QTY;
+        const canBuy = p => maxQty(p) >= 1;
+        // Minimal beli 2, kecuali stok tinggal 1 (boleh beli 1)
+        const minRequired = p => Math.min(MIN_QTY, maxQty(p));
         const findProduct = id => allProducts.find(p => p.id === id);
+        const cartItem = id => shoppingCart.find(i => i.id === id);
 
         function getBikeSvg(category, size = 'w-16 h-16') {
             const cat = (category || '').toLowerCase();
@@ -320,7 +343,7 @@
             return `<div class="w-full h-full flex items-center justify-center">${getBikeSvg(item.category, svgSize)}</div>`;
         }
 
-        // Parser CSV yang benar (mendukung tanda kutip, "" di dalam teks, dan baris CRLF)
+        // Parser CSV yang benar (mendukung tanda kutip, "" di dalam teks, enter di dalam sel, dan baris CRLF)
         function parseCSV(text) {
             const rows = [];
             let row = [], field = '', inQuotes = false;
@@ -342,30 +365,66 @@
             return rows;
         }
 
+        function normalizeProduct(p, idx) {
+            const num = v => parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10) || 0;
+            return {
+                id: num(p.id) || idx + 1,
+                name: String(p.name ?? '').trim(),
+                price: num(p.price),
+                stock: num(p.stock),
+                category: String(p.category || 'bmx').trim().toLowerCase(),
+                image: String(p.image ?? '').trim(),
+                keterangan: String(p.keterangan ?? '').trim()
+            };
+        }
+
+        // Baca CSV berdasarkan nama kolom di baris pertama (urutan kolom bebas)
+        function productsFromCSV(text) {
+            const rows = parseCSV(text);
+            const header = (rows[0] || []).map(h => h.trim().toLowerCase());
+            const col = names => names.map(n => header.indexOf(n)).find(i => i >= 0);
+            const idx = {
+                id: col(['id']) ?? 0,
+                name: col(['name', 'nama']) ?? 1,
+                price: col(['price', 'harga']) ?? 2,
+                stock: col(['stock', 'stok']) ?? 3,
+                category: col(['category', 'kategori']) ?? 4,
+                image: col(['image', 'gambar', 'foto']) ?? 5,
+                keterangan: col(['keterangan', 'desc', 'deskripsi'])
+            };
+            return rows.slice(1)
+                .map(cols => Object.fromEntries(Object.entries(idx).map(([k, i]) => [k, i === undefined ? '' : cols[i]])))
+                .filter(p => (p.name || '').trim() !== '');
+        }
+
         // ==========================================
-        // AMBIL DATA DARI GOOGLE SHEETS
+        // AMBIL DATA PRODUK
         // ==========================================
+        async function fetchProducts() {
+            if (APPS_SCRIPT_URL) {
+                try {
+                    const res = await fetch(APPS_SCRIPT_URL, { cache: 'no-store' });
+                    const data = await res.json();
+                    if (data.ok && data.products?.length) return data.products;
+                } catch (err) {
+                    console.warn('Apps Script gagal, coba CSV:', err);
+                }
+            }
+            const res = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return productsFromCSV(await res.text());
+        }
+
         async function loadProducts() {
             try {
-                const res = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const rows = parseCSV(await res.text());
-                const products = rows.slice(1)
-                    .filter(cols => (cols[1] || '').trim() !== '') // lewati baris kosong
-                    .map((cols, idx) => ({
-                        id: parseInt(cols[0], 10) || idx + 1,
-                        name: cols[1].trim(),
-                        price: parseInt((cols[2] || '').replace(/[^\d]/g, ''), 10) || 0,
-                        stock: parseInt((cols[3] || '').replace(/[^\d]/g, ''), 10) || 0,
-                        category: (cols[4] || 'bmx').trim().toLowerCase(),
-                        image: (cols[5] || '').trim(),
-                        desc: (cols[6] || '').trim()
-                    }));
-                if (!products.length) throw new Error('CSV kosong');
+                const products = (await fetchProducts())
+                    .map(normalizeProduct)
+                    .filter(p => p.name);
+                if (!products.length) throw new Error('Data kosong');
                 allProducts = products;
             } catch (err) {
                 console.warn('Gagal memuat Google Sheets, pakai data cadangan:', err);
-                allProducts = fallbackProducts;
+                if (!allProducts.length) allProducts = fallbackProducts;
             }
             $('loadingState').classList.add('hidden');
             loadCart();
@@ -383,15 +442,38 @@
             return `<span class="bg-emerald-600 text-white text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full">Stok ${item.stock}</span>`;
         }
 
-        function buyButton(item, extra = '') {
+        function minLabel(item) {
+            return minRequired(item) >= MIN_QTY ? `Min. beli ${MIN_QTY} unit` : 'Stok terakhir';
+        }
+
+        // Tombol di kartu produk: "Keranjang" jika belum ada, atau stepper - qty + jika sudah di keranjang
+        function productAction(item) {
             if (!canBuy(item)) {
-                return `<button disabled class="w-full h-10 rounded-xl bg-gray-200 dark:bg-zinc-800 text-gray-500 font-bold text-xs sm:text-sm cursor-not-allowed ${extra}">${item.stock <= 0 ? 'Stok Habis' : 'Stok Kurang'}</button>`;
+                return `<button disabled class="w-full h-10 rounded-xl bg-gray-200 dark:bg-zinc-800 text-gray-500 font-bold text-xs sm:text-sm cursor-not-allowed">Stok Habis</button>`;
+            }
+            const inCart = cartItem(item.id);
+            if (inCart) {
+                const short = inCart.qty < minRequired(item);
+                return `
+                <div class="flex items-center justify-between h-10 rounded-xl border ${short ? 'border-amber-400 bg-amber-50 dark:bg-amber-500/10' : 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10'}">
+                    <button onclick="changeQty(${item.id}, -1)" aria-label="Kurangi" class="w-10 h-full flex items-center justify-center text-gray-700 dark:text-gray-200"><i class="fa-solid ${inCart.qty <= 1 ? 'fa-trash-can text-red-500' : 'fa-minus'} text-xs"></i></button>
+                    <span class="text-sm font-extrabold">${inCart.qty}</span>
+                    <button onclick="changeQty(${item.id}, 1)" aria-label="Tambah" class="w-10 h-full flex items-center justify-center ${inCart.qty >= maxQty(item) ? 'text-gray-300 dark:text-zinc-600' : 'text-gray-700 dark:text-gray-200'}"><i class="fa-solid fa-plus text-xs"></i></button>
+                </div>
+                ${short ? `<p class="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-1 text-center">Tambah ${minRequired(item) - inCart.qty} lagi (min. ${minRequired(item)})</p>` : ''}`;
             }
             const po = isPO(item);
             const bg = po ? 'bg-amber-500 hover:bg-amber-400 active:bg-amber-600' : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700';
-            return `<button onclick="addToCart(${item.id})" class="w-full h-10 rounded-xl ${bg} text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-sm transition ${extra}">
+            return `<button onclick="addToCart(${item.id})" class="w-full h-10 rounded-xl ${bg} text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-sm transition">
                 <i class="fa-solid ${po ? 'fa-clock' : 'fa-cart-plus'}"></i> ${po ? 'Pre-Order' : 'Keranjang'}
             </button>`;
+        }
+
+        function refreshProductActions() {
+            document.querySelectorAll('[data-action-for]').forEach(el => {
+                const p = findProduct(Number(el.dataset.actionFor));
+                if (p) el.innerHTML = productAction(p);
+            });
         }
 
         function renderProducts(items) {
@@ -408,9 +490,10 @@
                     </button>
                     <div class="p-3 sm:p-4 flex flex-col flex-1">
                         <h3 onclick="openModal(${item.id})" class="font-bold text-[13px] sm:text-[15px] leading-snug line-clamp-2 min-h-[2.5em] cursor-pointer hover:text-emerald-600">${esc(item.name)}</h3>
+                        ${item.keterangan ? `<p class="mt-1 text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 line-clamp-2"><i class="fa-solid fa-tag text-[10px] mr-1"></i>${esc(item.keterangan)}</p>` : ''}
                         <p class="mt-1 text-sm sm:text-lg font-extrabold">${formatRupiah(item.price)}</p>
-                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3">Min. beli ${MIN_QTY} unit</p>
-                        <div class="mt-auto">${buyButton(item)}</div>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3">${minLabel(item)}</p>
+                        <div class="mt-auto" data-action-for="${item.id}">${productAction(item)}</div>
                     </div>
                 </article>
             `).join('');
@@ -432,7 +515,7 @@
 
             const filtered = allProducts.filter(item => {
                 const matchesCat = currentCategory === 'all' || item.category === currentCategory;
-                const haystack = `${item.name} ${item.category} ${item.desc}`.toLowerCase();
+                const haystack = `${item.name} ${item.category} ${item.keterangan}`.toLowerCase();
                 return matchesCat && haystack.includes(query);
             });
 
@@ -457,50 +540,53 @@
         }
 
         // ==========================================
-        // KERANJANG (min. 2 unit per jenis)
+        // KERANJANG
+        // Tombol menambah 1 unit. Checkout butuh min. 2 unit per jenis,
+        // kecuali stok tinggal 1 (boleh 1, tanpa peringatan).
         // ==========================================
         function saveCart() {
             try { localStorage.setItem('asa-cart', JSON.stringify(shoppingCart)); } catch (e) {}
         }
 
+        // Sesuaikan keranjang dengan stok terbaru
+        function syncCartWithStock() {
+            shoppingCart = shoppingCart
+                .map(i => ({ id: i.id, qty: i.qty, product: findProduct(i.id) }))
+                .filter(i => i.product && canBuy(i.product) && i.qty > 0)
+                .map(i => ({ id: i.id, qty: Math.min(i.qty, maxQty(i.product)) }));
+        }
+
         function loadCart() {
-            try {
-                const saved = JSON.parse(localStorage.getItem('asa-cart') || '[]');
-                shoppingCart = saved
-                    .map(i => ({ id: i.id, qty: i.qty, product: findProduct(i.id) }))
-                    .filter(i => i.product && canBuy(i.product))
-                    .map(i => ({ id: i.id, qty: Math.min(Math.max(i.qty, MIN_QTY), maxQty(i.product)) }));
-            } catch (e) { shoppingCart = []; }
+            try { shoppingCart = JSON.parse(localStorage.getItem('asa-cart') || '[]'); } catch (e) { shoppingCart = []; }
+            if (!Array.isArray(shoppingCart)) shoppingCart = [];
+            syncCartWithStock();
         }
 
         function addToCart(productId) {
             const product = findProduct(productId);
             if (!product || !canBuy(product)) return;
 
-            const existing = shoppingCart.find(i => i.id === productId);
-            if (existing) {
-                if (existing.qty >= maxQty(product)) {
-                    showToast(`Stok "${product.name}" hanya ${product.stock} unit`, 'amber');
-                    return;
-                }
-                existing.qty += 1;
-                showToast(`${product.name} jadi ${existing.qty} unit`);
-            } else {
-                shoppingCart.push({ id: productId, qty: MIN_QTY });
-                showToast(`${MIN_QTY} unit ${product.name} masuk keranjang`);
+            const existing = cartItem(productId);
+            if (existing && existing.qty >= maxQty(product)) {
+                showToast(`Stok "${product.name}" hanya ${product.stock} unit`, 'amber');
+                return;
             }
+            if (existing) existing.qty += 1;
+            else shoppingCart.push({ id: productId, qty: 1 });
+
+            const qty = cartItem(productId).qty;
+            const need = minRequired(product) - qty;
+            if (need > 0) showToast(`Masuk keranjang. Tambah ${need} lagi, minimal ${minRequired(product)} unit`, 'amber');
+            else showToast(`${product.name}: ${qty} unit di keranjang`);
             updateCartUI();
         }
 
         function changeQty(productId, delta) {
-            const item = shoppingCart.find(i => i.id === productId);
+            const item = cartItem(productId);
             const product = findProduct(productId);
             if (!item || !product) return;
             const next = item.qty + delta;
-            if (next < MIN_QTY) {
-                showToast(`Minimal pembelian ${MIN_QTY} unit. Hapus item jika tidak jadi.`, 'amber');
-                return;
-            }
+            if (next <= 0) return removeFromCart(productId);
             if (next > maxQty(product)) {
                 showToast(`Stok hanya ${product.stock} unit`, 'amber');
                 return;
@@ -529,8 +615,17 @@
             }, { qty: 0, price: 0 });
         }
 
+        // Item yang belum memenuhi minimal pembelian
+        function itemsBelowMinimum() {
+            return shoppingCart.filter(i => {
+                const p = findProduct(i.id);
+                return p && i.qty < minRequired(p);
+            });
+        }
+
         function updateCartUI() {
             saveCart();
+            refreshProductActions();
             const { qty, price } = cartTotals();
 
             $('cartBadge').textContent = qty;
@@ -555,10 +650,10 @@
             container.innerHTML = shoppingCart.map(item => {
                 const p = findProduct(item.id);
                 if (!p) return '';
-                const atMin = item.qty <= MIN_QTY;
+                const need = minRequired(p) - item.qty;
                 const atMax = item.qty >= maxQty(p);
                 return `
-                <div class="p-3 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50 flex gap-3">
+                <div id="cart-item-${item.id}" class="p-3 rounded-2xl border ${need > 0 ? 'border-amber-400 bg-amber-50 dark:bg-amber-500/10' : 'border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50'} flex gap-3">
                     <div class="w-16 h-16 shrink-0 rounded-xl bg-white overflow-hidden">
                         ${productImage(p, 'w-full h-full object-contain', 'w-8 h-8')}
                     </div>
@@ -569,10 +664,11 @@
                                 <i class="fa-solid fa-trash-can text-sm"></i>
                             </button>
                         </div>
+                        ${p.keterangan ? `<p class="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">${esc(p.keterangan)}</p>` : ''}
                         <p class="text-xs text-gray-500 dark:text-gray-400">${formatRupiah(p.price)} / unit</p>
                         <div class="mt-2 flex items-center justify-between gap-2">
                             <div class="flex items-center rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
-                                <button onclick="changeQty(${item.id}, -1)" aria-label="Kurangi" class="w-9 h-9 flex items-center justify-center ${atMin ? 'text-gray-300 dark:text-zinc-700' : 'text-gray-700 dark:text-gray-200'}">
+                                <button onclick="changeQty(${item.id}, -1)" aria-label="Kurangi" class="w-9 h-9 flex items-center justify-center text-gray-700 dark:text-gray-200">
                                     <i class="fa-solid fa-minus text-xs"></i>
                                 </button>
                                 <span class="w-8 text-center text-sm font-bold">${item.qty}</span>
@@ -582,7 +678,11 @@
                             </div>
                             <p class="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">${formatRupiah(p.price * item.qty)}</p>
                         </div>
-                        ${atMin ? `<p class="text-[11px] text-gray-400 mt-1">Minimal ${MIN_QTY} unit</p>` : ''}
+                        ${need > 0 ? `
+                        <div class="mt-2 flex items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-400 font-semibold">
+                            <span><i class="fa-solid fa-triangle-exclamation mr-1"></i>Minimal ${minRequired(p)} unit</span>
+                            <button onclick="changeQty(${item.id}, ${need})" class="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-bold">+ Tambah ${need}</button>
+                        </div>` : ''}
                     </div>
                 </div>`;
             }).join('');
@@ -611,11 +711,15 @@
                     </div>
                     <h3 class="text-xl font-extrabold mb-1">${esc(item.name)}</h3>
                     <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400">${formatRupiah(item.price)}</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Minimal pembelian ${MIN_QTY} unit</p>
-                    ${item.desc ? `<p class="text-sm text-gray-600 dark:text-gray-300 mb-5 leading-relaxed bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-xl">${esc(item.desc)}</p>` : ''}
-                    <div class="flex gap-2">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">${minLabel(item)}</p>
+                    ${item.keterangan ? `
+                    <div class="mb-5 bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-xl">
+                        <p class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Keterangan</p>
+                        <p class="text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-line">${esc(item.keterangan)}</p>
+                    </div>` : ''}
+                    <div class="flex gap-2 items-start">
                         <button onclick="closeModal()" class="h-10 px-5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold hover:bg-gray-100 dark:hover:bg-zinc-800">Tutup</button>
-                        <div class="flex-1" onclick="if(!event.target.closest('button[disabled]')) closeModal()">${buyButton(item)}</div>
+                        <div class="flex-1" data-action-for="${item.id}">${productAction(item)}</div>
                     </div>
                 </div>`;
             $('detailModal').classList.remove('hidden');
@@ -624,6 +728,7 @@
 
         function closeModal() {
             $('detailModal').classList.add('hidden');
+            $('modalContent').innerHTML = '';
             lockScroll(!$('cartDrawer').classList.contains('hidden'));
         }
 
@@ -634,43 +739,141 @@
         });
 
         // ==========================================
-        // KIRIM PESANAN KE WHATSAPP
+        // KIRIM PESANAN
         // ==========================================
-        function sendOrderToWhatsApp() {
+        function setFieldError(input, show) {
+            input.classList.toggle('field-error', show);
+            $(input.id + 'Error').classList.toggle('hidden', !show);
+        }
+        function clearFieldError(input) {
+            if (input.value.trim()) setFieldError(input, false);
+        }
+
+        function setSending(sending) {
+            const btn = $('sendOrderBtn');
+            btn.disabled = sending;
+            btn.innerHTML = sending
+                ? '<i class="fa-solid fa-spinner fa-spin"></i> Memproses pesanan...'
+                : '<i class="fa-brands fa-whatsapp text-xl"></i> Kirim Pesanan via WhatsApp';
+        }
+
+        // Kirim pesanan ke Google Sheets (cek & kurangi stok). Hasil: {ok, orderId} / {ok:false, error, problems}
+        async function submitOrderToSheet(order) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
+            try {
+                // text/plain supaya tidak diblokir CORS oleh Google Apps Script
+                const res = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(order),
+                    signal: controller.signal
+                });
+                return await res.json();
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        async function sendOrderToWhatsApp() {
             if (!shoppingCart.length) {
                 showToast('Keranjang masih kosong!', 'amber');
                 return;
             }
-            const nameInput = $('customerName');
-            const name = nameInput.value.trim();
-            if (!name) {
-                showToast('Mohon isi nama Anda dulu', 'amber');
-                nameInput.focus();
+
+            // 1. Cek minimal pembelian
+            const short = itemsBelowMinimum();
+            if (short.length) {
+                const p = findProduct(short[0].id);
+                showToast(`"${p.name}" minimal ${minRequired(p)} unit`, 'amber');
+                const el = $('cart-item-' + short[0].id);
+                if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('animate-shake'); setTimeout(() => el.classList.remove('animate-shake'), 700); }
                 return;
             }
-            const notes = $('customerNotes').value.trim() || '-';
-            const { price } = cartTotals();
 
+            // 2. Nama & alamat wajib
+            const nameInput = $('customerName');
+            const addressInput = $('customerAddress');
+            const name = nameInput.value.trim();
+            const address = addressInput.value.trim();
+            setFieldError(nameInput, !name);
+            setFieldError(addressInput, !address);
+            if (!name || !address) {
+                showToast(!name && !address ? 'Nama dan alamat wajib diisi' : (!name ? 'Nama wajib diisi' : 'Alamat wajib diisi'), 'amber');
+                (!name ? nameInput : addressInput).focus();
+                return;
+            }
+            const notes = $('customerNotes').value.trim();
+
+            // 3. Kurangi stok di Google Sheets
+            let orderId = '';
+            if (APPS_SCRIPT_URL) {
+                setSending(true);
+                try {
+                    const result = await submitOrderToSheet({
+                        name, address, notes,
+                        items: shoppingCart.map(i => ({ id: i.id, qty: i.qty }))
+                    });
+                    if (result.ok) {
+                        orderId = result.orderId || '';
+                    } else if (result.error === 'stock') {
+                        // Stok berubah (dibeli orang lain) -> sesuaikan keranjang
+                        (result.problems || []).forEach(pr => {
+                            const p = findProduct(Number(pr.id));
+                            if (p) p.stock = Number(pr.stock) || 0;
+                        });
+                        syncCartWithStock();
+                        filterProducts();
+                        updateCartUI();
+                        const first = (result.problems || [])[0];
+                        showToast(first ? `Stok "${first.name}" tinggal ${first.stock}. Keranjang sudah disesuaikan, silakan cek lagi.` : 'Stok berubah, silakan cek keranjang lagi.', 'amber');
+                        setSending(false);
+                        return;
+                    } else {
+                        console.warn('Gagal update stok:', result);
+                    }
+                } catch (err) {
+                    // Koneksi bermasalah: pesanan tetap dikirim ke WA, toko konfirmasi stok manual
+                    console.warn('Gagal menghubungi Google Sheets:', err);
+                }
+                setSending(false);
+            }
+
+            // 4. Susun pesan WhatsApp
+            const { price } = cartTotals();
             const itemDetails = shoppingCart.map((item, i) => {
                 const p = findProduct(item.id);
                 const poTag = isPO(p) ? ' *[PRE-ORDER]*' : '';
-                return `${i + 1}. *${p.name}*${poTag}\n   Jumlah: ${item.qty} unit x ${formatRupiah(p.price)}\n   Subtotal: ${formatRupiah(p.price * item.qty)}`;
+                const ket = p.keterangan ? `\n   Keterangan: ${p.keterangan}` : '';
+                return `${i + 1}. *${p.name}*${poTag}${ket}\n   Jumlah: ${item.qty} unit x ${formatRupiah(p.price)}\n   Subtotal: ${formatRupiah(p.price * item.qty)}`;
             }).join('\n\n');
 
             const message =
 `Halo *${STORE_NAME}*, saya ingin memesan:
-
+${orderId ? `\n🧾 No. Pesanan: *${orderId}*\n` : ''}
 📋 *RINCIAN PESANAN*
 ${itemDetails}
 
 💵 *TOTAL: ${formatRupiah(price)}*
 
 👤 Nama: ${name}
-📍 Alamat / Catatan: ${notes}
+📍 Alamat: ${address}
+📝 Catatan: ${notes || '-'}
 
 Mohon konfirmasi ketersediaan stok & cara pembayarannya. Terima kasih!`;
 
-            window.open(`https://wa.me/${STORE_WA_NUMBER}?text=${encodeURIComponent(message)}`, '_blank');
+            const waUrl = `https://wa.me/${STORE_WA_NUMBER}?text=${encodeURIComponent(message)}`;
+
+            // 5. Kosongkan keranjang jika stok sudah tercatat
+            if (orderId) {
+                shoppingCart = [];
+                updateCartUI();
+                closeCart();
+                loadProducts(); // muat ulang stok terbaru
+            }
+
+            // Pindah halaman (bukan pop-up) supaya tidak diblokir browser hape setelah proses di atas
+            window.location.href = waUrl;
         }
 
         // ==========================================
@@ -684,7 +887,7 @@ Mohon konfirmasi ketersediaan stok & cara pembayarannya. Terima kasih!`;
             toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span></span>`;
             toast.querySelector('span').textContent = message;
             $('toastContainer').replaceChildren(toast); // tampilkan satu notifikasi saja agar tidak menumpuk
-            setTimeout(() => toast.remove(), 2600);
+            setTimeout(() => toast.remove(), 3000);
         }
 
         function syncThemeIcon() {
