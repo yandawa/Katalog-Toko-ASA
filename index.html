@@ -72,13 +72,29 @@
                     <button onclick="toggleTheme()" aria-label="Ganti tema" class="w-10 h-10 rounded-xl border border-gray-200 dark:border-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-900 text-gray-600 dark:text-gray-300 flex items-center justify-center transition">
                         <i id="themeIcon" class="fa-solid fa-moon"></i>
                     </button>
-                    <button onclick="openCart()" aria-label="Buka keranjang" class="relative h-10 px-3 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-sm font-bold flex items-center gap-2 shadow-sm transition">
+                    <!-- Belum login -->
+                    <button id="loginBtn" onclick="openLogin()" class="h-10 px-4 rounded-xl bg-black text-white dark:bg-white dark:text-black text-sm font-bold flex items-center gap-2 shadow-sm transition">
+                        <i class="fa-solid fa-right-to-bracket"></i> Masuk
+                    </button>
+                    <!-- Sudah login -->
+                    <button id="accountBtn" onclick="toggleAccountMenu()" aria-label="Akun" class="hidden relative w-10 h-10 rounded-xl border border-gray-200 dark:border-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-900 text-gray-700 dark:text-gray-200 flex items-center justify-center">
+                        <i class="fa-solid fa-user"></i>
+                    </button>
+                    <button id="cartBtn" onclick="openCart()" aria-label="Buka keranjang" class="hidden relative h-10 px-3 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-sm font-bold flex items-center gap-2 shadow-sm transition">
                         <i class="fa-solid fa-cart-shopping"></i>
                         <span class="hidden sm:inline">Keranjang</span>
                         <span id="cartBadge" class="bg-white text-emerald-700 text-[11px] font-extrabold min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">0</span>
                     </button>
                 </div>
             </div>
+        </div>
+        <!-- Menu akun -->
+        <div id="accountMenu" class="hidden absolute right-4 sm:right-6 lg:right-8 top-[60px] w-64 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-xl p-4 animate-fade">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Masuk sebagai</p>
+            <p id="accountName" class="font-bold truncate"></p>
+            <button onclick="logout()" class="mt-3 w-full h-10 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-right-from-bracket"></i> Keluar
+            </button>
         </div>
     </header>
 
@@ -94,6 +110,10 @@
                 <p class="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
                     Pilih sepeda, masukkan ke keranjang, lalu kirim pesanan langsung ke WhatsApp toko kami.
                 </p>
+                <div id="loginBanner" class="hidden mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-sm text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2">
+                    <span><i class="fa-solid fa-lock mr-1"></i> Harga khusus pelanggan terdaftar.</span>
+                    <button onclick="openLogin()" class="font-bold underline underline-offset-2">Masuk untuk lihat harga</button>
+                </div>
                 <div class="flex flex-wrap gap-2 text-xs font-semibold">
                     <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800"><i class="fa-solid fa-boxes-stacked text-emerald-500"></i> Min. 2 unit / jenis</span>
                     <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800"><i class="fa-solid fa-clock text-amber-500"></i> Bisa Pre-Order</span>
@@ -134,6 +154,16 @@
             <div class="h-72 rounded-2xl bg-gray-200 dark:bg-zinc-900 animate-pulse"></div>
             <div class="h-72 rounded-2xl bg-gray-200 dark:bg-zinc-900 animate-pulse hidden md:block"></div>
             <div class="h-72 rounded-2xl bg-gray-200 dark:bg-zinc-900 animate-pulse hidden xl:block"></div>
+        </div>
+
+        <!-- GAGAL MEMUAT -->
+        <div id="loadError" class="hidden text-center py-16 px-4">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-zinc-900 flex items-center justify-center text-gray-400">
+                <i class="fa-solid fa-wifi text-2xl"></i>
+            </div>
+            <h3 class="text-base font-bold mb-1">Katalog belum bisa dimuat</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Periksa koneksi internet Anda, lalu coba lagi.</p>
+            <button onclick="loadProducts()" class="h-10 px-5 rounded-xl bg-emerald-600 text-white text-sm font-bold">Coba lagi</button>
         </div>
 
         <!-- EMPTY STATE -->
@@ -191,7 +221,8 @@
                     <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400"><i class="fa-solid fa-user-pen mr-1"></i> Data Pemesan</h4>
                     <div>
                         <label for="customerName" class="block text-xs font-semibold mb-1">Nama lengkap <span class="text-red-500">*</span></label>
-                        <input type="text" id="customerName" autocomplete="name" maxlength="100" oninput="clearFieldError(this)" class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <input type="text" id="customerName" autocomplete="name" maxlength="100" readonly oninput="clearFieldError(this)" class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-100 dark:bg-zinc-800/60 text-gray-700 dark:text-gray-300 focus:outline-none">
+                        <p class="text-[11px] text-gray-400 mt-1">Sesuai data pelanggan. Hubungi toko untuk mengubah.</p>
                         <p id="customerNameError" class="hidden text-xs text-red-500 mt-1">Nama wajib diisi</p>
                     </div>
                     <div>
@@ -234,6 +265,38 @@
         </div>
     </div>
 
+    <!-- LOGIN MODAL -->
+    <div id="loginModal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+        <div onclick="closeLogin()" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <form id="loginForm" onsubmit="submitLogin(event)" novalidate class="animate-fade absolute inset-x-0 bottom-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-sm bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 pb-safe">
+            <button type="button" onclick="closeLogin()" aria-label="Tutup" class="absolute top-3 right-3 w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center justify-center text-gray-500">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <img src="logo-asa.png" alt="ASA" class="logo-img h-10 w-auto mx-auto mb-3">
+            <h2 id="loginTitle" class="text-lg font-extrabold text-center">Masuk pelanggan</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 text-center mb-5">Untuk melihat harga dan memesan</p>
+
+            <label for="loginPhone" class="block text-xs font-semibold mb-1">Nomor WhatsApp</label>
+            <input type="tel" id="loginPhone" inputmode="tel" autocomplete="tel" placeholder="0812 3456 7890" maxlength="20"
+                class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3">
+
+            <label for="loginPin" class="block text-xs font-semibold mb-1">PIN dari toko (4 angka)</label>
+            <input type="password" id="loginPin" inputmode="numeric" autocomplete="current-password" pattern="[0-9]*" maxlength="4" placeholder="••••"
+                oninput="this.value = this.value.replace(/\D/g, '').slice(0, 4)"
+                class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 tracking-[0.5em] text-center font-bold">
+
+            <p id="loginError" class="hidden text-sm text-red-500 mt-3" role="alert"></p>
+
+            <button id="loginSubmit" type="submit" class="mt-4 w-full h-12 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-60 disabled:cursor-wait text-white font-bold rounded-xl flex items-center justify-center gap-2">
+                Masuk
+            </button>
+            <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
+                Belum terdaftar atau lupa PIN?
+                <a id="registerLink" href="#" target="_blank" rel="noopener" class="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">Hubungi toko via WhatsApp</a>
+            </p>
+        </form>
+    </div>
+
     <!-- TOAST -->
     <div id="toastContainer" class="fixed top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none"></div>
 
@@ -248,12 +311,9 @@
         const PO_MAX_QTY = 99;
 
         // Link Web App dari Google Apps Script (lihat folder apps-script/).
-        // Jika diisi: data produk diambil langsung dari sheet & stok otomatis berkurang saat pesanan dikirim.
-        // Jika kosong: data diambil dari CSV publik di bawah, stok tidak berubah otomatis.
+        // Semua data produk, login pelanggan, dan pengurangan stok lewat link ini.
+        // Harga hanya dikirim oleh Google ke pelanggan yang sudah login.
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxMkPiULyLNpd2elzMn-jWJxSEs2L_f0KSDmR2ew_9R48pIKbpD_AY-6uLRsbSovo4/exec';
-
-        // Link CSV publik Google Sheets (kolom: id, name, price, stock, category, image, keterangan)
-        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRlcQPHDkd2lbexP4kaTwZqndkTyNry3yC1jCnuu2n4i3MXTd_ar3v8Y2Z4Kp4BhC9ykvBJj6Xpn0O2/pub?output=csv';
 
         const CATEGORIES = [
             { id: 'all', label: 'Semua' },
@@ -267,31 +327,10 @@
         let allProducts = [];
         let shoppingCart = []; // { id, qty }
 
-        // Data cadangan jika Google Sheets gagal dimuat
-        const fallbackProducts = [
-            { id: 1, name: '12" BMX Velion', price: 490000, stock: 5, category: 'bmx' },
-            { id: 2, name: '12" Mini Monchichi Tinkerbell', price: 490000, stock: 5, category: 'mini' },
-            { id: 3, name: '12" Mini Tango HKM', price: 495000, stock: 5, category: 'mini' },
-            { id: 4, name: '12" Mini Velion', price: 490000, stock: 5, category: 'mini' },
-            { id: 5, name: '12" Mini Velion + Stir', price: 495000, stock: 5, category: 'mini' },
-            { id: 6, name: '16" BMX Tango Race', price: 495000, stock: 5, category: 'bmx' },
-            { id: 7, name: '16" BMX Velion', price: 490000, stock: 5, category: 'bmx' },
-            { id: 8, name: '16" Mini Monchichi Tinkerbell', price: 500000, stock: 5, category: 'mini' },
-            { id: 9, name: '16" Mini Monchichi Tinkerbell Musik', price: 510000, stock: 5, category: 'mini' },
-            { id: 10, name: '16" Mini Tango HKM', price: 510000, stock: 5, category: 'mini' },
-            { id: 11, name: '18" BMX Centrum', price: 525000, stock: 5, category: 'bmx' },
-            { id: 12, name: '18" BMX Tango Lolix', price: 485000, stock: 5, category: 'bmx' },
-            { id: 13, name: '18" BMX Velion Keranjang', price: 530000, stock: 5, category: 'bmx' },
-            { id: 14, name: '18" Mini Labubu', price: 585000, stock: 5, category: 'mini' },
-            { id: 15, name: '18" Mini Tango HKM', price: 525000, stock: 5, category: 'mini' },
-            { id: 16, name: '18" Mini Tango Princess', price: 535000, stock: 5, category: 'mini' },
-            { id: 17, name: '20" BMX Velion', price: 655000, stock: 5, category: 'bmx' },
-            { id: 18, name: '20" Mini Velion', price: 690000, stock: 5, category: 'mini' },
-            { id: 19, name: '20" MTB Velion', price: 985000, stock: 5, category: 'mtb' },
-            { id: 20, name: '24" MTB Velion', price: 1055000, stock: 5, category: 'mtb' },
-            { id: 21, name: '26" MTB Velion', price: 1080000, stock: 5, category: 'mtb' },
-            { id: 22, name: '27.5" MTB Foster', price: 1125000, stock: 5, category: 'mtb' }
-        ].map(p => ({ image: '', keterangan: '', ...p }));
+        // Status login. Token disimpan di hape pelanggan (30 hari), harga hanya ada di memori.
+        let authToken = '';
+        let currentCustomer = null; // { nama, alamat }
+        const isLoggedIn = () => !!currentCustomer;
 
         // ==========================================
         // HELPER
@@ -343,34 +382,12 @@
             return `<div class="w-full h-full flex items-center justify-center">${getBikeSvg(item.category, svgSize)}</div>`;
         }
 
-        // Parser CSV yang benar (mendukung tanda kutip, "" di dalam teks, enter di dalam sel, dan baris CRLF)
-        function parseCSV(text) {
-            const rows = [];
-            let row = [], field = '', inQuotes = false;
-            for (let i = 0; i < text.length; i++) {
-                const c = text[i];
-                if (inQuotes) {
-                    if (c === '"') {
-                        if (text[i + 1] === '"') { field += '"'; i++; }
-                        else inQuotes = false;
-                    } else field += c;
-                } else if (c === '"') inQuotes = true;
-                else if (c === ',') { row.push(field); field = ''; }
-                else if (c === '\n' || c === '\r') {
-                    if (c === '\r' && text[i + 1] === '\n') i++;
-                    row.push(field); rows.push(row); row = []; field = '';
-                } else field += c;
-            }
-            if (field !== '' || row.length) { row.push(field); rows.push(row); }
-            return rows;
-        }
-
         function normalizeProduct(p, idx) {
             const num = v => parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10) || 0;
             return {
                 id: num(p.id) || idx + 1,
                 name: String(p.name ?? '').trim(),
-                price: num(p.price),
+                price: p.price === undefined || p.price === null ? null : num(p.price), // null = belum login
                 stock: num(p.stock),
                 category: String(p.category || 'bmx').trim().toLowerCase(),
                 image: String(p.image ?? '').trim(),
@@ -378,55 +395,66 @@
             };
         }
 
-        // Baca CSV berdasarkan nama kolom di baris pertama (urutan kolom bebas)
-        function productsFromCSV(text) {
-            const rows = parseCSV(text);
-            const header = (rows[0] || []).map(h => h.trim().toLowerCase());
-            const col = names => names.map(n => header.indexOf(n)).find(i => i >= 0);
-            const idx = {
-                id: col(['id']) ?? 0,
-                name: col(['name', 'nama']) ?? 1,
-                price: col(['price', 'harga']) ?? 2,
-                stock: col(['stock', 'stok']) ?? 3,
-                category: col(['category', 'kategori']) ?? 4,
-                image: col(['image', 'gambar', 'foto']) ?? 5,
-                keterangan: col(['keterangan', 'desc', 'deskripsi'])
-            };
-            return rows.slice(1)
-                .map(cols => Object.fromEntries(Object.entries(idx).map(([k, i]) => [k, i === undefined ? '' : cols[i]])))
-                .filter(p => (p.name || '').trim() !== '');
+        // ==========================================
+        // KOMUNIKASI DENGAN GOOGLE APPS SCRIPT
+        // ==========================================
+        // POST memakai text/plain supaya tidak diblokir CORS oleh Google Apps Script
+        async function callScript(payload, timeoutMs = 20000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                return await res.json();
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        function saveToken(token) {
+            authToken = token || '';
+            try { token ? localStorage.setItem('asa-token', token) : localStorage.removeItem('asa-token'); } catch (e) {}
         }
 
         // ==========================================
         // AMBIL DATA PRODUK
         // ==========================================
         async function fetchProducts() {
-            if (APPS_SCRIPT_URL) {
-                try {
-                    const res = await fetch(APPS_SCRIPT_URL, { cache: 'no-store' });
-                    const data = await res.json();
-                    if (data.ok && data.products?.length) return data.products;
-                } catch (err) {
-                    console.warn('Apps Script gagal, coba CSV:', err);
+            if (authToken) {
+                const data = await callScript({ action: 'products', token: authToken });
+                if (!data.ok) throw new Error(data.message || data.error);
+                if (data.auth) {
+                    currentCustomer = data.customer;
+                } else {
+                    // Token kedaluwarsa / pelanggan dinonaktifkan
+                    saveToken('');
+                    currentCustomer = null;
                 }
+                return data.products;
             }
-            const res = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return productsFromCSV(await res.text());
+            currentCustomer = null;
+            const res = await fetch(APPS_SCRIPT_URL, { cache: 'no-store' });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.message || data.error);
+            return data.products;
         }
 
         async function loadProducts() {
+            $('loadError').classList.add('hidden');
             try {
-                const products = (await fetchProducts())
+                allProducts = (await fetchProducts())
                     .map(normalizeProduct)
                     .filter(p => p.name);
-                if (!products.length) throw new Error('Data kosong');
-                allProducts = products;
             } catch (err) {
-                console.warn('Gagal memuat Google Sheets, pakai data cadangan:', err);
-                if (!allProducts.length) allProducts = fallbackProducts;
+                console.warn('Gagal memuat katalog:', err);
+                if (!allProducts.length) $('loadError').classList.remove('hidden');
             }
             $('loadingState').classList.add('hidden');
+            applyAuthUI();
             loadCart();
             filterProducts();
             updateCartUI();
@@ -446,8 +474,18 @@
             return minRequired(item) >= MIN_QTY ? `Min. beli ${MIN_QTY} unit` : 'Stok terakhir';
         }
 
+        function priceHTML(item, cls) {
+            if (isLoggedIn() && item.price !== null) return `<p class="${cls}">${formatRupiah(item.price)}</p>`;
+            return `<p class="${cls} !font-semibold !text-gray-400 dark:!text-gray-500 !text-xs sm:!text-sm"><i class="fa-solid fa-lock mr-1"></i>Harga setelah masuk</p>`;
+        }
+
         // Tombol di kartu produk: "Keranjang" jika belum ada, atau stepper - qty + jika sudah di keranjang
         function productAction(item) {
+            if (!isLoggedIn()) {
+                return `<button onclick="openLogin()" class="w-full h-10 rounded-xl border border-gray-300 dark:border-zinc-700 text-gray-800 dark:text-gray-100 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 transition">
+                    <i class="fa-solid fa-right-to-bracket"></i> Masuk untuk beli
+                </button>`;
+            }
             if (!canBuy(item)) {
                 return `<button disabled class="w-full h-10 rounded-xl bg-gray-200 dark:bg-zinc-800 text-gray-500 font-bold text-xs sm:text-sm cursor-not-allowed">Stok Habis</button>`;
             }
@@ -491,7 +529,7 @@
                     <div class="p-3 sm:p-4 flex flex-col flex-1">
                         <h3 onclick="openModal(${item.id})" class="font-bold text-[13px] sm:text-[15px] leading-snug line-clamp-2 min-h-[2.5em] cursor-pointer hover:text-emerald-600">${esc(item.name)}</h3>
                         ${item.keterangan ? `<p class="mt-1 text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 line-clamp-2"><i class="fa-solid fa-tag text-[10px] mr-1"></i>${esc(item.keterangan)}</p>` : ''}
-                        <p class="mt-1 text-sm sm:text-lg font-extrabold">${formatRupiah(item.price)}</p>
+                        ${priceHTML(item, 'mt-1 text-sm sm:text-lg font-extrabold')}
                         <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3">${minLabel(item)}</p>
                         <div class="mt-auto" data-action-for="${item.id}">${productAction(item)}</div>
                     </div>
@@ -633,7 +671,7 @@
             $('cartTotalPrice').textContent = formatRupiah(price);
             $('mobileCartQty').textContent = `${qty} unit`;
             $('mobileCartTotal').textContent = formatRupiah(price);
-            $('mobileCartBar').classList.toggle('hidden', qty === 0);
+            $('mobileCartBar').classList.toggle('hidden', qty === 0 || !isLoggedIn());
             $('checkoutForm').classList.toggle('hidden', qty === 0);
 
             const container = $('cartItemsContainer');
@@ -692,7 +730,11 @@
         // BUKA / TUTUP PANEL
         // ==========================================
         function lockScroll(lock) { document.body.style.overflow = lock ? 'hidden' : ''; }
-        function openCart() { $('cartDrawer').classList.remove('hidden'); lockScroll(true); }
+        function openCart() {
+            if (!isLoggedIn()) return openLogin();
+            $('cartDrawer').classList.remove('hidden');
+            lockScroll(true);
+        }
         function closeCart() { $('cartDrawer').classList.add('hidden'); lockScroll(false); }
 
         function openModal(id) {
@@ -710,7 +752,7 @@
                         ${stockBadge(item)}
                     </div>
                     <h3 class="text-xl font-extrabold mb-1">${esc(item.name)}</h3>
-                    <p class="text-2xl font-black text-emerald-600 dark:text-emerald-400">${formatRupiah(item.price)}</p>
+                    ${priceHTML(item, 'text-2xl font-black text-emerald-600 dark:text-emerald-400')}
                     <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">${minLabel(item)}</p>
                     ${item.keterangan ? `
                     <div class="mb-5 bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-xl">
@@ -734,7 +776,8 @@
 
         document.addEventListener('keydown', e => {
             if (e.key !== 'Escape') return;
-            if (!$('detailModal').classList.contains('hidden')) closeModal();
+            if (!$('loginModal').classList.contains('hidden')) closeLogin();
+            else if (!$('detailModal').classList.contains('hidden')) closeModal();
             else if (!$('cartDrawer').classList.contains('hidden')) closeCart();
         });
 
@@ -757,25 +800,12 @@
                 : '<i class="fa-brands fa-whatsapp text-xl"></i> Kirim Pesanan via WhatsApp';
         }
 
-        // Kirim pesanan ke Google Sheets (cek & kurangi stok). Hasil: {ok, orderId} / {ok:false, error, problems}
-        async function submitOrderToSheet(order) {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 15000);
-            try {
-                // text/plain supaya tidak diblokir CORS oleh Google Apps Script
-                const res = await fetch(APPS_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(order),
-                    signal: controller.signal
-                });
-                return await res.json();
-            } finally {
-                clearTimeout(timer);
-            }
-        }
-
         async function sendOrderToWhatsApp() {
+            if (!isLoggedIn()) {
+                closeCart();
+                openLogin();
+                return;
+            }
             if (!shoppingCart.length) {
                 showToast('Keranjang masih kosong!', 'amber');
                 return;
@@ -805,17 +835,25 @@
             }
             const notes = $('customerNotes').value.trim();
 
-            // 3. Kurangi stok di Google Sheets
+            // 3. Kurangi stok di Google Sheets (Google juga mengecek login)
             let orderId = '';
-            if (APPS_SCRIPT_URL) {
+            {
                 setSending(true);
                 try {
-                    const result = await submitOrderToSheet({
+                    const result = await callScript({
+                        action: 'order', token: authToken,
                         name, address, notes,
                         items: shoppingCart.map(i => ({ id: i.id, qty: i.qty }))
                     });
                     if (result.ok) {
                         orderId = result.orderId || '';
+                    } else if (result.error === 'auth') {
+                        // Sesi habis atau pelanggan dinonaktifkan
+                        setSending(false);
+                        closeCart();
+                        await handleSignedOut('Sesi Anda sudah berakhir. Silakan masuk lagi.');
+                        openLogin();
+                        return;
                     } else if (result.error === 'stock') {
                         // Stok berubah (dibeli orang lain) -> sesuaikan keranjang
                         (result.problems || []).forEach(pr => {
@@ -877,6 +915,106 @@ Mohon konfirmasi ketersediaan stok & cara pembayarannya. Terima kasih!`;
         }
 
         // ==========================================
+        // LOGIN PELANGGAN
+        // ==========================================
+        function applyAuthUI() {
+            const logged = isLoggedIn();
+            $('loginBtn').classList.toggle('hidden', logged);
+            $('accountBtn').classList.toggle('hidden', !logged);
+            $('cartBtn').classList.toggle('hidden', !logged);
+            $('cartBtn').classList.toggle('flex', logged);
+            $('loginBanner').classList.toggle('hidden', logged);
+            $('accountName').textContent = logged ? currentCustomer.nama : '';
+            if (!logged) $('accountMenu').classList.add('hidden');
+
+            // Urutkan berdasarkan harga hanya untuk pelanggan yang sudah login
+            document.querySelectorAll('#sortSelect option[value^="price"]').forEach(o => { o.hidden = !logged; o.disabled = !logged; });
+            if (!logged && $('sortSelect').value.startsWith('price')) $('sortSelect').value = 'default';
+
+            // Isi otomatis data pemesan
+            if (logged) {
+                $('customerName').value = currentCustomer.nama || '';
+                if (!$('customerAddress').value.trim()) $('customerAddress').value = currentCustomer.alamat || '';
+            }
+        }
+
+        function openLogin() {
+            $('loginError').classList.add('hidden');
+            $('loginModal').classList.remove('hidden');
+            lockScroll(true);
+            setTimeout(() => $('loginPhone').focus(), 50);
+        }
+
+        function closeLogin() {
+            $('loginModal').classList.add('hidden');
+            lockScroll(false);
+        }
+
+        function showLoginError(msg) {
+            $('loginError').textContent = msg;
+            $('loginError').classList.remove('hidden');
+        }
+
+        async function submitLogin(e) {
+            e.preventDefault();
+            const phone = $('loginPhone').value.trim();
+            const pin = $('loginPin').value.trim();
+            if (phone.replace(/\D/g, '').length < 9) return showLoginError('Masukkan nomor WhatsApp yang benar');
+            if (!/^\d{4}$/.test(pin)) return showLoginError('PIN harus 4 angka');
+
+            const btn = $('loginSubmit');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memeriksa...';
+            try {
+                const result = await callScript({ action: 'login', phone, pin });
+                if (!result.ok) {
+                    showLoginError(result.message || 'Gagal masuk. Coba lagi.');
+                    return;
+                }
+                saveToken(result.token);
+                currentCustomer = result.customer;
+                $('loginPin').value = '';
+                closeLogin();
+                showToast(`Selamat datang, ${currentCustomer.nama || 'Pelanggan'}`);
+                await loadProducts(); // muat ulang dengan harga
+            } catch (err) {
+                console.warn('Login gagal:', err);
+                showLoginError('Tidak bisa terhubung. Periksa internet Anda lalu coba lagi.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Masuk';
+            }
+        }
+
+        // Bersihkan semua data pelanggan dari hape ini
+        async function handleSignedOut(message) {
+            saveToken('');
+            currentCustomer = null;
+            shoppingCart = [];
+            $('customerName').value = '';
+            $('customerAddress').value = '';
+            $('customerNotes').value = '';
+            if (message) showToast(message, 'amber');
+            await loadProducts(); // muat ulang tanpa harga
+        }
+
+        async function logout() {
+            const token = authToken;
+            $('accountMenu').classList.add('hidden');
+            await handleSignedOut();
+            showToast('Anda sudah keluar');
+            if (token) callScript({ action: 'logout', token }).catch(() => {});
+        }
+
+        function toggleAccountMenu() {
+            $('accountMenu').classList.toggle('hidden');
+        }
+
+        document.addEventListener('click', e => {
+            if (!e.target.closest('#accountMenu, #accountBtn')) $('accountMenu').classList.add('hidden');
+        });
+
+        // ==========================================
         // TOAST & TEMA
         // ==========================================
         function showToast(message, type = 'emerald') {
@@ -909,6 +1047,8 @@ Mohon konfirmasi ketersediaan stok & cara pembayarannya. Terima kasih!`;
             $('year').textContent = new Date().getFullYear();
             $('footerWA').href = `https://wa.me/${STORE_WA_NUMBER}`;
             $('footerWAText').textContent = STORE_WA_DISPLAY;
+            $('registerLink').href = `https://wa.me/${STORE_WA_NUMBER}?text=${encodeURIComponent(`Halo ${STORE_NAME}, saya ingin daftar sebagai pelanggan / minta PIN untuk katalog online.\n\nNama: \nNama toko (jika ada): \nAlamat: `)}`;
+            try { authToken = localStorage.getItem('asa-token') || ''; } catch (e) {}
             syncThemeIcon();
             renderCategoryBar();
             loadProducts(); // keranjang tersimpan dimuat setelah data produk siap
