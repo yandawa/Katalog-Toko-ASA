@@ -65,9 +65,8 @@ function doPost(e) {
       if (!l.po) sheet.getRange(l.row.index, col.stock + 1).setValue(l.p.stock - l.qty);
     });
 
-    const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
     const now = new Date();
-    const orderId = 'ASA-' + Utilities.formatDate(now, tz, 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 90 + 10);
+    const orderId = nextOrderId_(now);
     const itemText = lines.map(l => l.qty + 'x ' + l.p.name + (l.po ? ' [PO]' : '')).join('\n');
 
     orderSheet_().appendRow([now, orderId, name, address, notes, itemText, total, 'Baru']);
@@ -78,6 +77,33 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---------- nomor pesanan ----------
+
+/**
+ * Format: ASA-DDMMYY-XXX
+ *   DDMMYY = tanggal, bulan, tahun pesanan
+ *   XXX    = nomor urut dalam bulan itu (001, 002, ...), kembali ke 001 tiap awal bulan
+ * Contoh: pesanan ke-7 pada 25 November 2026 -> ASA-251126-007
+ */
+function nextOrderId_(date) {
+  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const monthKey = 'orderCounter_' + Utilities.formatDate(date, tz, 'yyyyMM');
+  const props = PropertiesService.getScriptProperties();
+  const next = (Number(props.getProperty(monthKey)) || 0) + 1;
+  props.setProperty(monthKey, String(next));
+  return 'ASA-' + Utilities.formatDate(date, tz, 'ddMMyy') + '-' + String(next).padStart(3, '0');
+}
+
+/**
+ * Jalankan manual dari editor Apps Script (pilih fungsi ini lalu klik Run)
+ * untuk mengulang nomor urut bulan ini dari 001, misalnya setelah pesanan tes dihapus.
+ */
+function resetNomorPesananBulanIni() {
+  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const monthKey = 'orderCounter_' + Utilities.formatDate(new Date(), tz, 'yyyyMM');
+  PropertiesService.getScriptProperties().deleteProperty(monthKey);
 }
 
 // ---------- helper ----------
