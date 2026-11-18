@@ -488,7 +488,8 @@ function invoicePdf_(o) {
   [c0, c1, c2].forEach(c => pad(c, 0, 2));
   const logoP = tight(c0.getChild(0).asParagraph());
   const img = logoP.appendInlineImage(Utilities.newBlob(Utilities.base64Decode(LOGO_B64), 'image/png', 'logo.png'));
-  img.setWidth(58).setHeight(Math.round(58 * img.getHeight() / img.getWidth()));
+  const w0 = img.getWidth(), h0 = img.getHeight(); // ukuran asli dulu, baru diperkecil (supaya tidak gepeng/tertarik)
+  img.setWidth(62).setHeight(Math.round(62 * h0 / w0));
   addLine(c0, 'ASA Bike Shop and Accessories', 7, false, GRAY);
   addLine(c0, 'Tabanan, Bali · WA 0851-1141-8200', 7, false, GRAY);
   cellText(c1, 'KEPADA / DIKIRIM KE', 6, true, GRAY);
