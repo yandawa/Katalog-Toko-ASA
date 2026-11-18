@@ -177,6 +177,12 @@ button.row.soon .th{border-style:dashed}
 .st-proses{background:var(--amber-tint);color:var(--amber-text);border:1px solid var(--amber-line)}
 .st-kirim{background:var(--green-tint);color:var(--green-text)}
 .st-selesai{background:var(--green);color:#fff}
+.stepsel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.ss{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:7px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;font-weight:600;line-height:1.2;text-align:center;cursor:pointer;transition:background .15s,border-color .15s,transform .1s}
+.ss:active{transform:scale(.95)}
+.ss b{font-size:15px;font-weight:900}
+.ss.done{border-color:var(--green);color:var(--green-text)}
+.ss.on{background:var(--green);border-color:var(--green);color:#fff}
 .steps{display:flex;gap:4px;margin-top:2px;width:100%}
 .steps i{flex:1;height:4px;border-radius:2px;background:var(--line)}
 .steps i.on{background:var(--green)}
@@ -576,25 +582,53 @@ const V = {
 };
 
 // ---------- riwayat ----------
-const STATUS = { Baru: 'st-baru', Diproses: 'st-proses', Dikirim: 'st-kirim', Selesai: 'st-selesai' };
-const STEP = { Baru: 1, Diproses: 2, Dikirim: 3, Selesai: 4 };
+// Tahap pesanan: bar terisi sesuai tahap. Hanya pemilik yang bisa mengubah.
+const STATUS = { Baru: 'st-baru', Diterima: 'st-kirim', Diproses: 'st-proses', Sampai: 'st-proses', Selesai: 'st-selesai' };
+const STATUS_LABEL = { Baru: 'Menunggu', Diterima: 'Diterima', Diproses: 'Diproses', Sampai: 'Sampai', Selesai: 'Selesai' };
+const STEP = { Baru: 0, Diterima: 1, Diproses: 2, Sampai: 3, Selesai: 4 };
+const STEP_INFO = [
+  'Menunggu konfirmasi toko',
+  'Pesanan diterima toko',
+  'Pesanan sedang diproses',
+  'Sudah diterima pelanggan, belum lunas',
+  'Lunas dan sudah beres'
+];
+const STEP_BTN = ['', 'Diterima toko', 'Diproses', 'Sampai, belum lunas', 'Lunas & selesai'];
+function statusPicker(o) {
+  const cur = STEP[o.status] || 0;
+  return `<div class="lbl" style="margin-top:2px">${ic('userpen')} Ubah status (pemilik)</div>
+    <div class="stepsel">${[1, 2, 3, 4].map(n => `<button class="ss${n === cur ? ' on' : n < cur ? ' done' : ''}" data-setstep="${n}" data-no="${esc(o.no)}" aria-pressed="${n === cur}"><b>${n}</b><span>${STEP_BTN[n]}</span></button>`).join('')}</div>`;
+}
 const orderTotal = o => o.items.length && o.items.every(i => i.p) ? o.items.reduce((a, b) => a + b.p * b.q, 0) : o.total;
 const payPill = o => o.lunas ? '<span class="st pay-yes">Lunas</span>' : '<span class="st pay-no">Belum lunas</span>';
 function orderCard(o, i) {
   const tot = orderTotal(o); const open = S.open === o.no;
   const qty = o.items.reduce((a, b) => a + b.q, 0);
   return `<div class="order${open ? ' open' : ''}" style="--i:${i}"><button data-order="${esc(o.no)}" aria-expanded="${open}">
-  <span class="top"><span class="no">${esc(o.no)}</span><span style="display:flex;gap:5px">${payPill(o)}<span class="st ${STATUS[o.status] || 'st-baru'}">${esc(o.status)}</span></span></span>
+  <span class="top"><span class="no">${esc(o.no)}</span><span style="display:flex;gap:5px">${payPill(o)}<span class="st ${STATUS[o.status] || 'st-baru'}">${esc(STATUS_LABEL[o.status] || o.status)}</span></span></span>
   ${isOwner() ? `<span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700">${ic('user')}${esc(o.nama)}</span>` : ''}
-  <span class="steps" aria-hidden="true">${[1, 2, 3, 4].map(n => `<i class="${n <= (STEP[o.status] || 1) ? 'on' : ''}"></i>`).join('')}</span>
+  <span class="steps" aria-hidden="true">${[1, 2, 3, 4].map(n => `<i class="${n <= (STEP[o.status] || 0) ? 'on' : ''}"></i>`).join('')}</span>
+  <span class="sm" style="margin-top:-2px">${STEP_INFO[STEP[o.status] || 0]}</span>
   <span class="meta"><span>${esc(o.tgl)} · ${qty} barang${o.oldTotal ? ' · <span style="color:var(--amber-text);font-weight:700">diubah toko</span>' : ''}</span><span style="display:flex;align-items:center;gap:6px"><b>${rp(tot)}</b><span class="chev">${ic('chev')}</span></span></span></button>
   ${open ? `<div class="det">${o.items.map(it => `<div class="ln"><span>${it.q} × ${esc(it.n)}${it.p ? `<br><span class="sm">@ ${rp(it.p)}</span>` : ''}</span><span>${it.p ? rp(it.p * it.q) : ''}</span></div>`).join('')}
     <div class="ln" style="border-top:1px dashed var(--line);padding-top:6px;font-weight:800"><span>Total</span><span>${rp(tot)}</span></div>
     <div class="ln"><span class="sm">Pembayaran</span>${payPill(o)}</div><div class="sm">Dikirim ke: ${esc(o.alamat)}</div>${o.catatan ? `<div class="sm">Catatan: ${esc(o.catatan)}</div>` : ''}
     ${o.oldTotal ? `<div class="sm" style="background:var(--amber-tint);border:1px solid var(--amber-line);color:var(--amber-text);border-radius:10px;padding:7px 10px">${isOwner() ? 'Pesanan ini sudah diubah.' : 'Jumlah atau harga pesanan ini sudah disesuaikan oleh toko.'} Semula total ${rp(o.oldTotal)}.</div>` : ''}
     ${isOwner()
-      ? `<div class="sm" style="background:var(--soft2);border:1px dashed var(--line);border-radius:10px;padding:8px 10px">Ubah status atau centang <b>Lunas</b> di tab Pesanan Google Sheets. Invoice PDF dibuat dari menu <b>ASA → Buat invoice PDF</b>.</div>`
+      ? `${statusPicker(o)}<div class="sm" style="background:var(--soft2);border:1px dashed var(--line);border-radius:10px;padding:8px 10px">Tahap 4 otomatis mencentang <b>Lunas</b>. Invoice PDF dibuat dari menu <b>ASA → Buat invoice PDF</b> di Google Sheets.</div>`
       : `<a class="btn out" href="https://wa.me/${STORE_WA_NUMBER}?text=${encodeURIComponent(`Halo ${STORE_NAME}, saya mau tanya pesanan ${o.no}`)}" target="_blank" rel="noopener" style="margin-top:4px;text-decoration:none">${ic('wa')}Tanya pesanan ini</a>`}</div>` : ''}</div>`;
+}
+async function setStatus(no, step, btn) {
+  const o = (S.orders || []).find(x => x.no === no); if (!o || !isOwner()) return;
+  if ((STEP[o.status] || 0) === step) return;
+  document.querySelectorAll(`[data-setstep][data-no="${CSS.escape(no)}"]`).forEach(b => b.disabled = true);
+  btn.innerHTML = '<b>…</b><span>Menyimpan</span>';
+  try {
+    const r = await callScript({ action: 'set_status', token: S.token, no, step });
+    if (!r.ok) { toast(r.message || 'Status belum tersimpan', true); if (r.error === 'auth') { await signedOut('Sesi Anda sudah berakhir. Silakan masuk lagi.'); return; } }
+    else { const i = S.orders.findIndex(x => x.no === no); if (i >= 0) S.orders[i] = r.order; toast(`${no}: ${STEP_INFO[step]}`); }
+  } catch (e) { toast('Tidak bisa terhubung. Coba lagi.', true); }
+  if (S.v === 'hist') { $('view').innerHTML = V.hist(); $('view').querySelectorAll('.stagger,.pop').forEach(el => el.classList.remove('stagger', 'pop')); }
 }
 const myOrders = () => S.orders || [];
 function histList() {
@@ -849,6 +883,7 @@ $('phone').addEventListener('click', e => {
   if (d.reload) { S.loadError = false; S.loaded = false; render(); loadProducts().then(() => render('tab')); return; }
   if (d.reloadhist) { loadOrders(true); return; }
   if (d.order) { S.open = S.open === d.order ? null : d.order; $('histBody').innerHTML = histList(); $('histBody').querySelector('.stagger')?.classList.remove('stagger'); return; }
+  if (d.setstep) { setStatus(d.no, +d.setstep, t); return; }
   if (d.hf) { S.hf = d.hf; S.open = null; document.querySelectorAll('[data-hf]').forEach(c => c.classList.toggle('on', c.dataset.hf === S.hf)); $('histBody').innerHTML = histList(); return; }
 });
 $('phone').addEventListener('input', e => {

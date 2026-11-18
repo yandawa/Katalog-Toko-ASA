@@ -11,6 +11,7 @@
  *  - POST {action:'order'}      : cek & kurangi stok, catat ke tab "Pesanan" + "Detail Pesanan"
  *  - POST {action:'history'}    : riwayat pesanan (pelanggan: miliknya; pemilik: semua)
  *  - POST {action:'edit_product'}: pemilik mengubah stok & harga barang di katalog
+ *  - POST {action:'set_status'}  : pemilik mengubah tahap pesanan (1 Diterima, 2 Diproses, 3 Sampai, 4 Selesai/lunas)
  *
  *  Di Google Sheets ada menu "ASA":
  *  - Buat invoice PDF  : invoice A5 mendatar dari baris pesanan yang dipilih, disimpan di Drive "Invoice ASA"
@@ -65,6 +66,7 @@ function doPost(e) {
       case 'order': return json_(order_(body));
       case 'history': return json_(history_(body));
       case 'edit_product': return json_(editProduct_(body));
+      case 'set_status': return json_(setStatus_(body));
       default: return json_({ ok: false, error: 'unknown', message: 'Aksi tidak dikenal' });
     }
   } catch (err) {
@@ -297,12 +299,50 @@ function orderFromRow_(r, details, tz) {
   };
 }
 
+// Tahap pesanan (bar di tab Riwayat). Hanya pemilik yang bisa mengubah lewat web.
+//   0 Baru      : pesanan masuk, belum dikonfirmasi toko
+//   1 Diterima  : pesanan diterima toko
+//   2 Diproses  : pesanan sedang diproses
+//   3 Sampai    : barang sudah diterima pelanggan, belum lunas
+//   4 Selesai   : lunas dan sudah beres
+const STATUS_STEPS = ['Baru', 'Diterima', 'Diproses', 'Sampai', 'Selesai'];
+
 function normalizeStatus_(s) {
   const v = String(s || '').trim().toLowerCase();
-  if (v.indexOf('selesai') === 0) return 'Selesai';
-  if (v.indexOf('kirim') >= 0) return 'Dikirim';
+  if (v.indexOf('selesai') === 0 || v === 'beres') return 'Selesai';
+  if (v.indexOf('sampai') >= 0 || v.indexOf('kirim') >= 0 || v.indexOf('pelanggan') >= 0) return 'Sampai';
   if (v.indexOf('proses') >= 0) return 'Diproses';
+  if (v.indexOf('terima') >= 0) return 'Diterima';
   return 'Baru';
+}
+
+function setStatus_(body) {
+  const customer = customerFromToken_(body.token);
+  if (!customer) return { ok: false, error: 'auth', message: 'Silakan masuk lagi' };
+  if (!customer.owner) return { ok: false, error: 'forbidden', message: 'Hanya pemilik toko yang bisa mengubah status' };
+  const no = String(body.no || '').trim();
+  const step = Math.floor(Number(body.step));
+  if (!no || !(step >= 0 && step <= 4)) return { ok: false, error: 'invalid', message: 'Status tidak valid' };
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    const os = orderSheet_();
+    const r = table_(os).rows.find(x => String(x.get('No. Pesanan')).trim() === no);
+    if (!r) return { ok: false, error: 'notfound', message: 'Pesanan tidak ditemukan' };
+    const h = headerIndex_(os);
+    const before = STATUS_STEPS.indexOf(normalizeStatus_(r.get('Status')));
+    os.getRange(r.index, h['status'] + 1).setValue(STATUS_STEPS[step]);
+    // Tahap 4 = lunas. Kalau diturunkan dari tahap 4, tanda lunas ikut dilepas.
+    if (h['lunas'] >= 0) {
+      if (step === 4) os.getRange(r.index, h['lunas'] + 1).setValue(true);
+      else if (before === 4) os.getRange(r.index, h['lunas'] + 1).setValue(false);
+    }
+    const fresh = table_(os).rows.find(x => x.index === r.index);
+    return { ok: true, order: orderFromRow_(fresh, detailMap_(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone()) };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ---------- pemilik: ubah stok & harga barang di katalog ----------
@@ -493,7 +533,7 @@ function invoicePdf_(o) {
   const qty = o.items.reduce((a, b) => a + b.q, 0);
   const total = o.items.every(it => it.p) ? o.items.reduce((a, b) => a + b.p * b.q, 0) : o.total;
   cellText(br, o.items.length + ' jenis barang · ' + qty + ' item', 7, false, GRAY, RIGHT);
-  addLine(br, 'Status: ' + o.status, 7, false, GRAY, RIGHT);
+  addLine(br, 'Status: ' + ({ Baru: 'Menunggu konfirmasi', Diterima: 'Diterima toko', Diproses: 'Diproses', Sampai: 'Sudah diterima pelanggan', Selesai: 'Selesai' }[o.status] || o.status), 7, false, GRAY, RIGHT);
   addLine(br, 'Total  Rp ' + fmt_(total), 11, true, null, RIGHT).setSpacingBefore(3);
   // Cap miring LUNAS / BELUM LUNAS (gambar, karena Google Docs tidak bisa memiringkan tulisan)
   const sp = tight(br.appendParagraph('')).setAlignment(RIGHT).setSpacingBefore(5);
