@@ -10,7 +10,7 @@
  *  - POST {action:'products'}   : katalog lengkap dengan harga (butuh token)
  *  - POST {action:'order'}      : cek & kurangi stok, catat ke tab "Pesanan" + "Detail Pesanan"
  *  - POST {action:'history'}    : riwayat pesanan (pelanggan: miliknya; pemilik: semua)
- *  - POST {action:'edit_order'} : pemilik mengubah jumlah & harga barang di pesanan
+ *  - POST {action:'edit_product'}: pemilik mengubah stok & harga barang di katalog
  *
  *  Di Google Sheets ada menu "ASA":
  *  - Buat invoice PDF  : invoice A5 mendatar dari baris pesanan yang dipilih, disimpan di Drive "Invoice ASA"
@@ -64,7 +64,7 @@ function doPost(e) {
       case 'products': return json_(productsForToken_(body.token));
       case 'order': return json_(order_(body));
       case 'history': return json_(history_(body));
-      case 'edit_order': return json_(editOrder_(body));
+      case 'edit_product': return json_(editProduct_(body));
       default: return json_({ ok: false, error: 'unknown', message: 'Aksi tidak dikenal' });
     }
   } catch (err) {
@@ -305,79 +305,30 @@ function normalizeStatus_(s) {
   return 'Baru';
 }
 
-// ---------- pemilik: ubah jumlah & harga ----------
+// ---------- pemilik: ubah stok & harga barang di katalog ----------
 
-function editOrder_(body) {
+function editProduct_(body) {
   const customer = customerFromToken_(body.token);
   if (!customer) return { ok: false, error: 'auth', message: 'Silakan masuk lagi' };
-  if (!customer.owner) return { ok: false, error: 'forbidden', message: 'Hanya pemilik toko yang bisa mengubah pesanan' };
-  const no = String(body.no || '').trim();
-  if (!no || !Array.isArray(body.items)) return { ok: false, error: 'invalid', message: 'Data tidak lengkap' };
+  if (!customer.owner) return { ok: false, error: 'forbidden', message: 'Hanya pemilik toko yang bisa mengubah barang' };
+  const id = String(Math.floor(Number(body.id)) || '');
+  const stock = Math.floor(Number(body.stock));
+  const price = Math.round(Number(body.price));
+  if (!id) return { ok: false, error: 'invalid', message: 'Barang tidak dikenal' };
+  if (!(stock >= 0 && stock <= 999999)) return { ok: false, error: 'invalid', message: 'Stok harus angka 0 atau lebih' };
+  if (!(price > 0)) return { ok: false, error: 'invalid', message: 'Harga harus diisi' };
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    const os = orderSheet_();
-    const ot = table_(os);
-    const orow = ot.rows.find(r => String(r.get('No. Pesanan')).trim() === no);
-    if (!orow) return { ok: false, error: 'notfound', message: 'Pesanan tidak ditemukan' };
-
-    const details = detailMap_()[no];
-    if (!details) return { ok: false, error: 'no_detail', message: 'Pesanan lama ini belum punya rincian per barang, jadi belum bisa diubah dari web' };
-    if (body.items.length !== details.length) return { ok: false, error: 'invalid', message: 'Data barang tidak cocok, muat ulang halaman' };
-
-    const changes = details.map((d, k) => {
-      const q = Math.floor(Number(body.items[k].q));
-      const p = Math.round(Number(body.items[k].p));
-      return { d: d, q: q, p: p };
-    });
-    if (changes.some(c => !(c.q >= 1 && c.q <= 9999) || !(c.p > 0))) {
-      return { ok: false, error: 'invalid', message: 'Jumlah minimal 1 dan harga harus diisi' };
-    }
-
-    // Cek & sesuaikan stok
     const prod = readProducts_();
-    const deltas = {};
-    changes.forEach(c => {
-      const delta = c.q - c.d.item.q;
-      if (delta !== 0 && c.d.item.id) deltas[c.d.item.id] = (deltas[c.d.item.id] || 0) + delta;
-    });
-    const problems = [];
-    const stockUpdates = [];
-    Object.keys(deltas).forEach(id => {
-      const row = prod.rows.find(r => String(toProduct_(r.values, r.col).id) === id);
-      if (!row) return;
-      const p = toProduct_(row.values, row.col);
-      if (p.po) return;
-      if (deltas[id] > p.stock) { problems.push({ id: p.id, name: p.name, stock: p.stock }); return; }
-      stockUpdates.push({ index: row.index, stock: p.stock - deltas[id] });
-    });
-    if (problems.length) {
-      const pr = problems[0];
-      return { ok: false, error: 'stock', problems: problems, message: 'Stok "' + pr.name + '" tinggal ' + pr.stock + ', tidak cukup untuk menambah jumlah' };
-    }
-    stockUpdates.forEach(u => prod.sheet.getRange(u.index, prod.col.stock + 1).setValue(u.stock));
-
-    // Perbarui Detail Pesanan
-    const ds = detailSheet_();
-    const dh = headerIndex_(ds);
-    changes.forEach(c => {
-      ds.getRange(c.d.index, dh['jumlah'] + 1).setValue(c.q);
-      ds.getRange(c.d.index, dh['harga'] + 1).setValue(c.p);
-      ds.getRange(c.d.index, dh['subtotal'] + 1).setValue(c.q * c.p);
-      c.d.item.q = c.q; c.d.item.p = c.p;
-    });
-
-    // Perbarui baris Pesanan
-    const oh = headerIndex_(os);
-    const oldTotal = num_(orow.get('Total'));
-    const newTotal = changes.reduce((a, c) => a + c.q * c.p, 0);
-    if (!num_(orow.get('Total Semula')) && newTotal !== oldTotal) os.getRange(orow.index, oh['total semula'] + 1).setValue(oldTotal);
-    os.getRange(orow.index, oh['total'] + 1).setValue(newTotal);
-    os.getRange(orow.index, oh['barang'] + 1).setValue(itemsText_(changes.map(c => ({ n: c.d.item.n, q: c.q }))));
-
-    const fresh = table_(os).rows.find(r => String(r.get('No. Pesanan')).trim() === no);
-    return { ok: true, order: orderFromRow_(fresh, detailMap_(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone()) };
+    if (prod.col.stock < 0 || prod.col.price < 0) return { ok: false, error: 'invalid', message: 'Kolom stock / price tidak ditemukan di tab produk' };
+    const row = prod.rows.find(r => String(toProduct_(r.values, r.col).id) === id);
+    if (!row) return { ok: false, error: 'notfound', message: 'Barang tidak ditemukan di Sheets' };
+    prod.sheet.getRange(row.index, prod.col.stock + 1).setValue(stock);
+    prod.sheet.getRange(row.index, prod.col.price + 1).setValue(price);
+    const fresh = readProducts_().rows.find(r => r.index === row.index);
+    return { ok: true, product: toProduct_(fresh.values, fresh.col) };
   } finally {
     lock.releaseLock();
   }
