@@ -643,13 +643,23 @@ function table_(sh) {
   return { sheet: sh, rows: rows, col: col };
 }
 
+// Tulis di baris kosong pertama (dilihat dari kolom pertama di obj, mis. "No. Pesanan").
+// Tidak memakai appendRow, karena kotak centang kosong sampai baris 1000 membuat appendRow menulis di baris 1001.
 function appendByHeader_(sh, obj) {
   const h = headerIndex_(sh);
   const lastCol = Math.max(sh.getLastColumn(), 1);
-  const row = new Array(lastCol).fill('');
+  const keyName = Object.keys(obj).find(k => k !== 'Waktu' && h[k.toLowerCase()] >= 0) || Object.keys(obj)[0];
+  const keyCol = h[keyName.toLowerCase()];
+  const values = sh.getDataRange().getValues();
+  let last = 1;
+  for (let i = values.length - 1; i >= 1; i--) {
+    if (String(values[i][keyCol] === undefined ? '' : values[i][keyCol]).trim() !== '') { last = i + 1; break; }
+  }
+  const target = last + 1;
+  const row = sh.getRange(target, 1, 1, lastCol).getValues()[0].map(v => (v === false ? false : ''));
   Object.keys(obj).forEach(k => { const i = h[k.toLowerCase()]; if (i >= 0) row[i] = obj[k]; });
-  sh.appendRow(row);
-  return sh.getLastRow();
+  sh.getRange(target, 1, 1, lastCol).setValues([row]);
+  return target;
 }
 
 function readProducts_() {
