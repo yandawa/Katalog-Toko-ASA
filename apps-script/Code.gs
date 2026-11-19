@@ -11,6 +11,8 @@
  *  - POST {action:'order'}      : cek & kurangi stok, catat ke tab "Pesanan" + "Detail Pesanan"
  *  - POST {action:'history'}    : riwayat pesanan (pelanggan: miliknya; pemilik: semua)
  *  - POST {action:'edit_product'}: pemilik mengubah stok & harga barang di katalog
+ *  - POST {action:'edit_order_qty'}: pemilik mengubah jumlah barang di pesanan (stok ikut menyesuaikan)
+ *  - POST {action:'cancel_order'}  : pemilik membatalkan pesanan (stok dikembalikan, status Dibatalkan)
  *  - POST {action:'set_status'}  : pemilik mengubah tahap pesanan (1 Diterima, 2 Diproses, 3 Sampai, 4 Selesai/lunas)
  *
  *  Di Google Sheets ada menu "ASA":
@@ -67,6 +69,8 @@ function doPost(e) {
       case 'history': return json_(history_(body));
       case 'edit_product': return json_(editProduct_(body));
       case 'set_status': return json_(setStatus_(body));
+      case 'edit_order_qty': return json_(editOrderQty_(body));
+      case 'cancel_order': return json_(cancelOrder_(body));
       default: return json_({ ok: false, error: 'unknown', message: 'Aksi tidak dikenal' });
     }
   } catch (err) {
@@ -256,6 +260,7 @@ function order_(order) {
       'Satuan': l.p.satuan, 'Harga': l.p.price, 'Subtotal': l.p.price * l.qty
     }));
 
+    try { notifyNewOrder_({ no: orderId, nama: name, username: customer.username, alamat: address, catatan: notes, total: total, items: lines.map(l => ({ n: l.p.name, q: l.qty, p: l.p.price, po: l.p.po })) }); } catch (e) { console.warn('notif gagal', e); }
     return { ok: true, orderId: orderId, total: total, customer: { nama: name } };
   } finally {
     lock.releaseLock();
@@ -269,21 +274,26 @@ function history_(body) {
   if (!customer) return { ok: false, error: 'auth', message: 'Silakan masuk lagi' };
   const t = table_(orderSheet_());
   const details = detailMap_();
+  const poMap = productPoMap_();
   const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
   const orders = t.rows
     .filter(r => String(r.get('No. Pesanan')).trim() !== '')
     .filter(r => customer.owner || normalizeUsername_(r.get('Username')) === customer.username)
-    .map(r => orderFromRow_(r, details, tz))
+    .filter(r => normalizeStatus_(r.get('Status')) !== 'Dibatalkan')
+    .map(r => orderFromRow_(r, details, tz, poMap))
     .reverse()
     .slice(0, customer.owner ? 500 : 100);
   return { ok: true, owner: customer.owner, orders: orders };
 }
 
-function orderFromRow_(r, details, tz) {
+function orderFromRow_(r, details, tz, poMap) {
   const no = String(r.get('No. Pesanan')).trim();
   const w = r.get('Waktu');
   const d = w instanceof Date ? w : null;
   const items = details[no] ? details[no].map(x => x.item) : parseItemsText_(r.get('Barang'));
+  const pm = poMap || productPoMap_();
+  const poNames = String(r.get('Barang')).split('\n').filter(l => /\[PO\]\s*$/.test(l)).map(l => l.replace(/^\d+\s*x\s*/i, '').replace(/\s*\[PO\]\s*$/, '').trim().toLowerCase());
+  items.forEach(it => { it.po = !!(it.po || (it.id && pm.byId[it.id]) || pm.byName[String(it.n).toLowerCase()] || poNames.indexOf(String(it.n).toLowerCase()) >= 0); });
   return {
     no: no,
     tgl: d ? Number(Utilities.formatDate(d, tz, 'd')) + ' ' + BULAN[Number(Utilities.formatDate(d, tz, 'M')) - 1] + ' ' + Utilities.formatDate(d, tz, 'yyyy') : String(w || ''),
@@ -309,6 +319,7 @@ const STATUS_STEPS = ['Baru', 'Diterima', 'Diproses', 'Sampai', 'Selesai'];
 
 function normalizeStatus_(s) {
   const v = String(s || '').trim().toLowerCase();
+  if (v.indexOf('batal') >= 0) return 'Dibatalkan';
   if (v.indexOf('selesai') === 0 || v === 'beres') return 'Selesai';
   if (v.indexOf('sampai') >= 0 || v.indexOf('kirim') >= 0 || v.indexOf('pelanggan') >= 0) return 'Sampai';
   if (v.indexOf('proses') >= 0) return 'Diproses';
@@ -374,6 +385,189 @@ function editProduct_(body) {
   }
 }
 
+// ---------- pemilik: ubah jumlah / batalkan pesanan (stok ikut menyesuaikan) ----------
+
+// id barang & nama barang (huruf kecil) -> true jika pre-order
+function productPoMap_() {
+  const map = { byId: {}, byName: {} };
+  readProducts_().rows.forEach(r => { const p = toProduct_(r.values, r.col); map.byId[p.id] = p.po; map.byName[p.name.toLowerCase()] = p.po; });
+  return map;
+}
+
+// Cari baris produk berdasarkan id, atau nama jika id tidak ada (pesanan lama)
+function findProductRow_(prod, id, name) {
+  return prod.rows.find(r => { const p = toProduct_(r.values, r.col); return id ? String(p.id) === String(id) : p.name.toLowerCase() === String(name || '').toLowerCase(); });
+}
+
+function editOrderQty_(body) {
+  const customer = customerFromToken_(body.token);
+  if (!customer) return { ok: false, error: 'auth', message: 'Silakan masuk lagi' };
+  if (!customer.owner) return { ok: false, error: 'forbidden', message: 'Hanya pemilik toko yang bisa mengubah pesanan' };
+  const no = String(body.no || '').trim();
+  if (!no || !Array.isArray(body.items)) return { ok: false, error: 'invalid', message: 'Data tidak lengkap' };
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    const os = orderSheet_();
+    const orow = table_(os).rows.find(r => String(r.get('No. Pesanan')).trim() === no);
+    if (!orow) return { ok: false, error: 'notfound', message: 'Pesanan tidak ditemukan' };
+    if (normalizeStatus_(orow.get('Status')) === 'Dibatalkan') return { ok: false, error: 'invalid', message: 'Pesanan ini sudah dibatalkan' };
+    const details = detailMap_()[no];
+    if (!details) return { ok: false, error: 'no_detail', message: 'Pesanan lama ini belum punya rincian per barang, jadi jumlahnya belum bisa diubah dari web' };
+    if (body.items.length !== details.length) return { ok: false, error: 'invalid', message: 'Data barang tidak cocok, muat ulang halaman' };
+
+    const qs = body.items.map(it => Math.floor(Number(it.q)));
+    if (qs.some(q => !(q >= 0 && q <= 9999))) return { ok: false, error: 'invalid', message: 'Jumlah harus angka 0 atau lebih' };
+    if (qs.every(q => q === 0)) return { ok: false, error: 'invalid', message: 'Semua jumlah 0. Pakai tombol Batalkan pesanan.' };
+
+    // Cek stok untuk barang yang jumlahnya ditambah
+    const prod = readProducts_();
+    const updates = [];
+    for (let k = 0; k < details.length; k++) {
+      const it = details[k].item, delta = qs[k] - it.q;
+      if (!delta) continue;
+      const row = findProductRow_(prod, it.id, it.n);
+      if (!row) continue;
+      const p = toProduct_(row.values, row.col);
+      if (p.po) continue;
+      if (delta > p.stock) return { ok: false, error: 'stock', message: 'Stok "' + p.name + '" tinggal ' + p.stock + ', tidak cukup untuk menambah ' + delta };
+      updates.push({ index: row.index, stock: p.stock - delta });
+    }
+    updates.forEach(u => prod.sheet.getRange(u.index, prod.col.stock + 1).setValue(u.stock));
+
+    // Perbarui Detail Pesanan (baris dengan jumlah 0 dihapus, dari bawah supaya nomor baris tidak bergeser)
+    const ds = detailSheet_();
+    const dh = headerIndex_(ds);
+    details.forEach((d, k) => {
+      if (qs[k] > 0) { ds.getRange(d.index, dh['jumlah'] + 1).setValue(qs[k]); ds.getRange(d.index, dh['subtotal'] + 1).setValue(qs[k] * d.item.p); }
+    });
+    details.map((d, k) => ({ d: d, q: qs[k] })).filter(x => x.q === 0).sort((a, b) => b.d.index - a.d.index).forEach(x => ds.deleteRow(x.d.index));
+
+    // Perbarui baris Pesanan
+    const oh = headerIndex_(os);
+    const pm = productPoMap_();
+    const kept = details.map((d, k) => ({ n: d.item.n, q: qs[k], p: d.item.p, po: !!(d.item.id && pm.byId[d.item.id]) })).filter(x => x.q > 0);
+    const oldTotal = num_(orow.get('Total'));
+    const newTotal = kept.reduce((a, x) => a + x.q * x.p, 0);
+    if (!num_(orow.get('Total Semula')) && newTotal !== oldTotal && oh['total semula'] >= 0) os.getRange(orow.index, oh['total semula'] + 1).setValue(oldTotal);
+    os.getRange(orow.index, oh['total'] + 1).setValue(newTotal);
+    os.getRange(orow.index, oh['barang'] + 1).setValue(itemsText_(kept));
+
+    const fresh = table_(os).rows.find(r => r.index === orow.index);
+    return { ok: true, order: orderFromRow_(fresh, detailMap_(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone()) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function cancelOrder_(body) {
+  const customer = customerFromToken_(body.token);
+  if (!customer) return { ok: false, error: 'auth', message: 'Silakan masuk lagi' };
+  if (!customer.owner) return { ok: false, error: 'forbidden', message: 'Hanya pemilik toko yang bisa membatalkan pesanan' };
+  const no = String(body.no || '').trim();
+  if (!no) return { ok: false, error: 'invalid', message: 'Data tidak lengkap' };
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    const os = orderSheet_();
+    const orow = table_(os).rows.find(r => String(r.get('No. Pesanan')).trim() === no);
+    if (!orow) return { ok: false, error: 'notfound', message: 'Pesanan tidak ditemukan' };
+    if (normalizeStatus_(orow.get('Status')) === 'Dibatalkan') return { ok: false, error: 'invalid', message: 'Pesanan ini sudah dibatalkan' };
+
+    // Kembalikan stok barang ready (pre-order tidak mengurangi stok, jadi tidak dikembalikan)
+    const o = orderFromRow_(orow, detailMap_(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone());
+    const prod = readProducts_();
+    const returned = [];
+    o.items.forEach(it => {
+      if (it.po) return;
+      const row = findProductRow_(prod, it.id, it.n);
+      if (!row) return;
+      const p = toProduct_(row.values, row.col);
+      prod.sheet.getRange(row.index, prod.col.stock + 1).setValue(p.stock + it.q);
+      returned.push({ name: p.name, q: it.q });
+    });
+    const oh = headerIndex_(os);
+    os.getRange(orow.index, oh['status'] + 1).setValue('Dibatalkan');
+    return { ok: true, no: no, returned: returned };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------- notifikasi pesanan baru (Telegram + email) ----------
+
+function notifyNewOrder_(o) {
+  const lines = o.items.map(it => '• ' + it.q + 'x ' + it.n + (it.po ? ' [PRE-ORDER]' : '') + ' — Rp ' + fmt_(it.p * it.q));
+  const text = '🛒 PESANAN BARU ' + o.no + '\n\n' +
+    'Pelanggan: ' + o.nama + ' (' + o.username + ')\n\n' +
+    lines.join('\n') + '\n\n' +
+    'Total: Rp ' + fmt_(o.total) + '\n' +
+    (o.catatan ? 'Catatan: ' + o.catatan + '\n' : '') +
+    'Alamat: ' + o.alamat + '\n\n' +
+    'Cek di web: https://asabikes.vercel.app (menu Riwayat)';
+  sendTelegram_(text);
+  sendOwnerEmail_('Pesanan baru ' + o.no + ' dari ' + o.nama, text);
+}
+
+function sendTelegram_(text) {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('TG_TOKEN'), chat = props.getProperty('TG_CHAT');
+  if (!token || !chat) return false;
+  const res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+    method: 'post', payload: { chat_id: chat, text: text, disable_web_page_preview: 'true' }, muteHttpExceptions: true
+  });
+  return res.getResponseCode() === 200;
+}
+
+function sendOwnerEmail_(subject, text) {
+  const props = PropertiesService.getScriptProperties();
+  const setting = props.getProperty('NOTIF_EMAIL');
+  if (setting === 'off') return false;
+  const to = setting || Session.getEffectiveUser().getEmail();
+  if (!to) return false;
+  MailApp.sendEmail(to, subject, text);
+  return true;
+}
+
+/** Menu ASA > Hubungkan notifikasi Telegram: simpan token bot dari @BotFather. */
+function hubungkanTelegram() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('Hubungkan Telegram',
+    'Tempel token bot dari @BotFather (contoh: 123456789:ABCdef...).', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const token = r.getResponseText().trim();
+  if (!/^\d+:[\w-]{20,}$/.test(token)) { ui.alert('Token sepertinya tidak lengkap. Salin ulang dari @BotFather.'); return; }
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('TG_TOKEN', token);
+  props.deleteProperty('TG_CHAT');
+  ui.alert('Token tersimpan',
+    'Sekarang buka bot Anda di Telegram, tekan Start atau kirim pesan apa saja (misalnya "halo").\n\nSetelah itu kembali ke sini dan pilih menu ASA > Tes notifikasi.', ui.ButtonSet.OK);
+}
+
+/** Menu ASA > Tes notifikasi: hubungkan chat Telegram (sekali) lalu kirim pesan tes ke Telegram & email. */
+function tesNotifikasi() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('TG_TOKEN');
+  let tgInfo = 'Telegram belum dihubungkan (menu ASA > Hubungkan notifikasi Telegram).';
+  if (token) {
+    if (!props.getProperty('TG_CHAT')) {
+      const res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/getUpdates', { muteHttpExceptions: true });
+      const data = JSON.parse(res.getContentText() || '{}');
+      const last = (data.result || []).filter(u => u.message && u.message.chat).pop();
+      if (last) props.setProperty('TG_CHAT', String(last.message.chat.id));
+    }
+    if (!props.getProperty('TG_CHAT')) tgInfo = 'Telegram: belum ada pesan ke bot. Buka bot Anda, tekan Start / kirim "halo", lalu coba lagi.';
+    else tgInfo = sendTelegram_('✅ Tes notifikasi ASA Bike Shop berhasil. Pesanan baru akan muncul di sini.') ? 'Telegram: terkirim ✅' : 'Telegram: gagal mengirim. Periksa token bot.';
+  }
+  let mailInfo;
+  try { mailInfo = sendOwnerEmail_('Tes notifikasi ASA Bike Shop', 'Tes notifikasi berhasil. Pesanan baru akan dikirim ke email ini.') ? 'Email: terkirim ✅' : 'Email: dimatikan'; }
+  catch (e) { mailInfo = 'Email: gagal (' + e + ')'; }
+  ui.alert('Hasil tes notifikasi', tgInfo + '\n' + mailInfo, ui.ButtonSet.OK);
+}
+
 // ======================================================================
 // MENU DI GOOGLE SHEETS
 // ======================================================================
@@ -382,6 +576,9 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('ASA')
     .addItem('Buat invoice PDF (baris yang dipilih)', 'buatInvoicePdf')
+    .addSeparator()
+    .addItem('Hubungkan notifikasi Telegram', 'hubungkanTelegram')
+    .addItem('Tes notifikasi', 'tesNotifikasi')
     .addSeparator()
     .addItem('Siapkan sheet', 'siapkanSheet')
     .addToUi();
@@ -435,12 +632,20 @@ function buatInvoicePdf() {
   if (!o.wa) { const c = findCustomer_(normalizeUsername_(r.get('Username'))); if (c) o.wa = c.noWa; }
   if (details[o.no]) details[o.no].forEach((d, k) => { o.items[k].u = d.item.u; });
 
-  const pdf = invoicePdf_(o);
+  // Barang pre-order dibuatkan invoice terpisah karena dikirim belakangan
+  const ready = o.items.filter(it => !it.po), po = o.items.filter(it => it.po);
+  const hasPrices = o.items.every(it => it.p);
+  const parts = (ready.length && po.length && hasPrices)
+    ? [Object.assign({}, o, { items: ready, fileName: o.no }), Object.assign({}, o, { items: po, fileName: o.no + '-PO', title: 'INVOICE PRE-ORDER', poNote: true })]
+    : [Object.assign({}, o, po.length && !ready.length ? { title: 'INVOICE PRE-ORDER', poNote: true } : {})];
   const folder = invoiceFolder_();
-  const existing = folder.getFilesByName(pdf.getName());
-  while (existing.hasNext()) existing.next().setTrashed(true);
-  const file = folder.createFile(pdf);
-  ui.alert('Invoice ' + o.no + ' dibuat', 'Tersimpan di Google Drive, folder "' + INVOICE_FOLDER_NAME + '":\n\n' + file.getUrl(), ui.ButtonSet.OK);
+  const urls = parts.map(part => {
+    const pdf = invoicePdf_(part);
+    const existing = folder.getFilesByName(pdf.getName());
+    while (existing.hasNext()) existing.next().setTrashed(true);
+    return pdf.getName() + ':\n' + folder.createFile(pdf).getUrl();
+  });
+  ui.alert('Invoice ' + o.no + ' dibuat', (parts.length > 1 ? 'Barang ready dan pre-order dibuat terpisah.\n\n' : '') + 'Tersimpan di Google Drive, folder "' + INVOICE_FOLDER_NAME + '":\n\n' + urls.join('\n\n'), ui.ButtonSet.OK);
 }
 
 function invoiceFolder_() {
@@ -451,7 +656,7 @@ function invoiceFolder_() {
 // Invoice A5 mendatar dibuat sebagai Google Docs sementara, lalu diekspor ke PDF.
 function invoicePdf_(o) {
   const A = DocumentApp.Attribute;
-  const doc = DocumentApp.create('Invoice ' + o.no);
+  const doc = DocumentApp.create('Invoice ' + (o.fileName || o.no));
   const body = doc.getBody();
   body.setPageWidth(595.3).setPageHeight(419.5)
     .setMarginTop(20).setMarginBottom(18).setMarginLeft(22).setMarginRight(22);
@@ -488,7 +693,7 @@ function invoicePdf_(o) {
   addLine(c1, o.alamat, 8, false);
   const sub = [o.wa ? 'WA ' + o.wa : '', o.catatan ? 'Catatan: ' + o.catatan : ''].filter(String).join(' · ');
   if (sub) addLine(c1, sub, 7, false, GRAY);
-  cellText(c2, 'INVOICE', 13, true, null, RIGHT);
+  cellText(c2, o.title || 'INVOICE', o.title ? 11 : 13, true, o.poNote ? '#b45309' : null, RIGHT);
   addLine(c2, o.no, 9, true, null, RIGHT);
   addLine(c2, o.tglPanjang, 8, false, GRAY, RIGHT);
   tight(body.appendParagraph('')).editAsText().setFontSize(3);
@@ -541,12 +746,12 @@ function invoicePdf_(o) {
   const cw = cap.getWidth(), chh = cap.getHeight(), capW = o.lunas ? 72 : 118;
   cap.setWidth(capW).setHeight(Math.round(capW * chh / cw));
 
-  const foot = body.appendParagraph('Barang yang sudah diterima dan ditandatangani dianggap lengkap.  ·  Terima kasih telah berbelanja di ASA');
+  const foot = body.appendParagraph((o.poNote ? 'Barang pre-order: dikirim setelah barang datang.  ·  ' : '') + 'Barang yang sudah diterima dan ditandatangani dianggap lengkap.  ·  Terima kasih telah berbelanja di ASA');
   tight(foot).setSpacingBefore(4); style(foot, 6, false, '#9ca3af');
 
   doc.saveAndClose();
   const file = DriveApp.getFileById(doc.getId());
-  const pdf = file.getAs('application/pdf').setName(o.no + '.pdf');
+  const pdf = file.getAs('application/pdf').setName((o.fileName || o.no) + '.pdf');
   file.setTrashed(true);
   return pdf;
 }
