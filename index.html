@@ -787,7 +787,9 @@ async function saveProduct(id) {
 
 // ---------- cara terima: diantar hanya untuk minimal 10 sepeda ----------
 const MIN_KIRIM_SEPEDA = 10;
-const bikeCount = () => S.cart.reduce((a, c) => { const p = prod(c.id); return a + (p && (p.group === 'Sepeda' || p.group === 'Pre-order') ? c.q : 0); }, 0);
+// Hanya sepeda ready stok yang dihitung. Sepeda pre-order datang menyusul dan dikirim terpisah.
+const bikeCount = () => S.cart.reduce((a, c) => { const p = prod(c.id); return a + (p && p.group === 'Sepeda' && !p.po ? c.q : 0); }, 0);
+const hasPO = () => S.cart.some(c => { const p = prod(c.id); return p && p.po; });
 const canShip = () => bikeCount() >= MIN_KIRIM_SEPEDA;
 const deliveryMode = () => (canShip() ? (S.delivery || 'kirim') : 'ambil');
 function deliveryBlock() {
@@ -797,7 +799,8 @@ function deliveryBlock() {
       <button class="ss${mode === 'kirim' ? ' on' : ''}" data-deliv="kirim"${ship ? '' : ' disabled style="opacity:.45;cursor:not-allowed"'}><b>🚚</b><span>Dikirim ke alamat</span></button>
       <button class="ss${mode === 'ambil' ? ' on' : ''}" data-deliv="ambil"><b>🏪</b><span>Ambil sendiri di toko</span></button>
     </div>
-    ${ship ? '' : `<div class="sm" style="background:var(--amber-tint);border:1px solid var(--amber-line);color:var(--amber-text);border-radius:10px;padding:8px 10px">Pengiriman minimal ${MIN_KIRIM_SEPEDA} sepeda. Pesanan ini ${n} sepeda, jadi <b>diambil sendiri di toko</b>.${n > 0 ? ` Tambah ${MIN_KIRIM_SEPEDA - n} sepeda lagi supaya bisa dikirim.` : ''}</div>`}`;
+    ${ship ? '' : `<div class="sm" style="background:var(--amber-tint);border:1px solid var(--amber-line);color:var(--amber-text);border-radius:10px;padding:8px 10px">Pengiriman minimal ${MIN_KIRIM_SEPEDA} sepeda ready stok. Pesanan ini ${n} sepeda ready, jadi <b>diambil sendiri di toko</b>.${n > 0 ? ` Tambah ${MIN_KIRIM_SEPEDA - n} sepeda ready lagi supaya bisa dikirim.` : ''}${hasPO() ? ' Sepeda pre-order tidak ikut dihitung.' : ''}</div>`}
+    ${hasPO() ? `<div class="sm" style="background:var(--soft2);border:1px dashed var(--line);border-radius:10px;padding:8px 10px">${ic('clock')} Barang <b>pre-order</b> menyusul terpisah setelah barang datang. Toko akan menghubungi Anda untuk pengirimannya.</div>` : ''}`;
 }
 
 function renderSheet(animate) {
@@ -873,7 +876,7 @@ async function sendOrder() {
   finally { if (btn.isConnected) { btn.disabled = false; btn.innerHTML = `${ic('wa')}Kirim Pesanan via WhatsApp`; } }
 
   const lines = S.cart.map((c, i) => { const p = prod(c.id); return `${i + 1}. *${p.name}*${p.po ? ' *[PRE-ORDER]*' : ''}${p.keterangan ? `\n   Keterangan: ${p.keterangan}` : ''}\n   ${c.q} ${p.satuan || 'unit'} x ${rp(p.price)} = ${rp(p.price * c.q)}`; }).join('\n\n');
-  const message = `Halo *${STORE_NAME}*, saya ingin memesan:\n${orderId ? `\n🧾 No. Pesanan: *${orderId}*\n` : ''}\n📋 *RINCIAN PESANAN*\n${lines}\n\n💵 *TOTAL: ${rp(totals().p)}*\n\n👤 Nama: ${S.user.nama || S.user.username}\n🚚 Cara terima: ${mode === 'ambil' ? '*Ambil sendiri di toko*' : 'Dikirim ke alamat'}${mode === 'kirim' ? `\n📍 Alamat: ${address}` : ''}\n📝 Catatan: ${userNote || '-'}\n\nMohon konfirmasi stok & cara pembayarannya. Terima kasih!`;
+  const message = `Halo *${STORE_NAME}*, saya ingin memesan:\n${orderId ? `\n🧾 No. Pesanan: *${orderId}*\n` : ''}\n📋 *RINCIAN PESANAN*\n${lines}\n\n💵 *TOTAL: ${rp(totals().p)}*\n\n👤 Nama: ${S.user.nama || S.user.username}\n🚚 Cara terima: ${mode === 'ambil' ? '*Ambil sendiri di toko*' : 'Dikirim ke alamat'}${mode === 'kirim' ? `\n📍 Alamat: ${address}` : ''}${hasPO() ? '\n⏳ Barang pre-order menyusul terpisah setelah barang datang' : ''}\n📝 Catatan: ${userNote || '-'}\n\nMohon konfirmasi stok & cara pembayarannya. Terima kasih!`;
   S.cart = []; saveCart(); S.orders = null; closeSheet(); refresh();
   window.location.href = `https://wa.me/${STORE_WA_NUMBER}?text=${encodeURIComponent(message)}`;
 }
