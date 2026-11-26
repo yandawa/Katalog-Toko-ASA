@@ -602,6 +602,15 @@ function statusPicker(o) {
   return `<div class="lbl" style="margin-top:2px">${ic('userpen')} Ubah status (pemilik)</div>
     <div class="stepsel">${[1, 2, 3, 4].map(n => `<button class="ss${n === cur ? ' on' : n < cur ? ' done' : ''}" data-setstep="${n}" data-no="${esc(o.no)}" aria-pressed="${n === cur}"><b>${n}</b><span>${STEP_BTN[n]}</span></button>`).join('')}</div>`;
 }
+// Jatuh tempo = tanggal pesanan diterima toko + 1 bulan (dihitung di Apps Script). Tidak ditampilkan kalau sudah lunas.
+function dueLine(o) {
+  if (o.lunas || !o.jatuhTempo) return '';
+  const now = new Date(), today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const [y, m, d] = o.jatuhTempo.iso.split('-').map(Number), days = Math.round((Date.UTC(y, m - 1, d) - today) / 864e5);
+  const late = days < 0, soon = days >= 0 && days <= 7;
+  const note = late ? ` · lewat ${-days} hari` : days === 0 ? ' · hari ini' : soon ? ` · ${days} hari lagi` : '';
+  return `<span class="sm" style="font-weight:700;color:${late ? 'var(--red)' : soon ? 'var(--amber-text)' : 'var(--fg)'}">Jatuh tempo: ${esc(o.jatuhTempo.label)}${note}</span>`;
+}
 const orderTotal = o => o.items.length && o.items.every(i => i.p) ? o.items.reduce((a, b) => a + b.p * b.q, 0) : o.total;
 const payPill = o => o.lunas ? '<span class="st pay-yes">Lunas</span>' : '<span class="st pay-no">Belum lunas</span>';
 function orderCard(o, i) {
@@ -611,7 +620,7 @@ function orderCard(o, i) {
   <span class="top"><span class="no">${esc(o.no)}</span><span style="display:flex;gap:5px">${payPill(o)}<span class="st ${STATUS[o.status] || 'st-baru'}">${esc(STATUS_LABEL[o.status] || o.status)}</span></span></span>
   ${isOwner() ? `<span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700">${ic('user')}${esc(o.nama)}</span>` : ''}
   <span class="steps" aria-hidden="true">${[1, 2, 3, 4].map(n => `<i class="${n <= (STEP[o.status] || 0) ? 'on' : ''}"></i>`).join('')}</span>
-  <span class="sm" style="margin-top:-2px">${STEP_INFO[STEP[o.status] || 0]}</span>
+  <span class="sm" style="margin-top:-2px">${STEP_INFO[STEP[o.status] || 0]}</span>${dueLine(o)}
   <span class="meta"><span>${esc(o.tgl)} · ${qty} barang${o.oldTotal ? ' · <span style="color:var(--amber-text);font-weight:700">diubah toko</span>' : ''}</span><span style="display:flex;align-items:center;gap:6px"><b>${rp(tot)}</b><span class="chev">${ic('chev')}</span></span></span></button>
   ${open ? `<div class="det">${o.items.map(it => `<div class="ln"><span>${it.q} × ${esc(it.n)}${it.p ? `<br><span class="sm">@ ${rp(it.p)}</span>` : ''}</span><span>${it.p ? rp(it.p * it.q) : ''}</span></div>`).join('')}
     <div class="ln" style="border-top:1px dashed var(--line);padding-top:6px;font-weight:800"><span>Total</span><span>${rp(tot)}</span></div>

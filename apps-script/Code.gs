@@ -38,7 +38,7 @@ const SESSION_DAYS = 30;
 const MAX_LOGIN_FAILS = 5;      // salah PIN berturut-turut sebelum dikunci
 const LOCK_MINUTES = 15;        // lama dikunci
 
-const ORDER_COLUMNS = ['Waktu', 'No. Pesanan', 'Nama', 'Alamat', 'Catatan', 'Barang', 'Total', 'Status', 'Username', 'No. WA', 'Lunas', 'Total Semula'];
+const ORDER_COLUMNS = ['Waktu', 'No. Pesanan', 'Nama', 'Alamat', 'Catatan', 'Barang', 'Total', 'Status', 'Username', 'No. WA', 'Lunas', 'Total Semula', 'Tgl Diterima'];
 const DETAIL_COLUMNS = ['No. Pesanan', 'ID Barang', 'Nama Barang', 'Jumlah', 'Satuan', 'Harga', 'Subtotal'];
 const CUSTOMER_COLUMNS = ['nama', 'username', 'pin', 'alamat', 'no_wa', 'aktif', 'peran'];
 const SEPEDA_SUBS = ['bmx', 'mini', 'mtb', 'lipat', 'balap', 'city'];
@@ -293,7 +293,7 @@ function orderFromRow_(r, details, tz, poMap) {
   const items = details[no] ? details[no].map(x => x.item) : parseItemsText_(r.get('Barang'));
   const pm = poMap || productPoMap_();
   const poNames = String(r.get('Barang')).split('\n').filter(l => /\[PO\]\s*$/.test(l)).map(l => l.replace(/^\d+\s*x\s*/i, '').replace(/\s*\[PO\]\s*$/, '').trim().toLowerCase());
-  items.forEach(it => { it.po = !!(it.po || (it.id && pm.byId[it.id]) || pm.byName[String(it.n).toLowerCase()] || poNames.indexOf(String(it.n).toLowerCase()) >= 0); });
+  items.forEach(it => { it.po = !!(it.po || (it.id && pm.byId[it.id]) || pm.byName[String(it.n).toLowerCase()] || poNames.indexOf(String(it.n).toLowerCase()) >= 0); if (!it.u) it.u = (it.id && pm.unitById[it.id]) || pm.unitByName[String(it.n).toLowerCase()] || ''; });
   return {
     no: no,
     tgl: d ? Number(Utilities.formatDate(d, tz, 'd')) + ' ' + BULAN[Number(Utilities.formatDate(d, tz, 'M')) - 1] + ' ' + Utilities.formatDate(d, tz, 'yyyy') : String(w || ''),
@@ -305,8 +305,23 @@ function orderFromRow_(r, details, tz, poMap) {
     total: num_(r.get('Total')),
     oldTotal: num_(r.get('Total Semula')),
     editable: !!details[no],
+    jatuhTempo: dueDate_(r, d, tz),
     items: items
   };
+}
+
+// Jatuh tempo = tanggal pesanan diterima toko (kolom "Tgl Diterima") + 1 bulan.
+// Pesanan lama yang sudah diterima tapi belum punya tanggal: dihitung dari tanggal pesan.
+function dueDate_(r, orderDate, tz) {
+  const status = normalizeStatus_(r.get('Status'));
+  if (status === 'Baru' || status === 'Dibatalkan') return null;
+  const acc = r.get('Tgl Diterima');
+  const base = acc instanceof Date ? acc : orderDate;
+  if (!base) return null;
+  const y = Number(Utilities.formatDate(base, tz, 'yyyy')), m = Number(Utilities.formatDate(base, tz, 'M')), day = Number(Utilities.formatDate(base, tz, 'd'));
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); // 31 Jan -> 28/29 Feb
+  const dd = Math.min(day, last), mm = m % 12 + 1, yy = m === 12 ? y + 1 : y;
+  return { iso: yy + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0'), label: dd + ' ' + BULAN[mm - 1] + ' ' + yy };
 }
 
 // Tahap pesanan (bar di tab Riwayat). Hanya pemilik yang bisa mengubah lewat web.
@@ -344,6 +359,12 @@ function setStatus_(body) {
     const h = headerIndex_(os);
     const before = STATUS_STEPS.indexOf(normalizeStatus_(r.get('Status')));
     os.getRange(r.index, h['status'] + 1).setValue(STATUS_STEPS[step]);
+    // Catat tanggal pesanan diterima toko (sekali saja) untuk menghitung jatuh tempo
+    if (step >= 1 && before === 0 && !(r.get('Tgl Diterima') instanceof Date)) {
+      let col = h['tgl diterima'];
+      if (col < 0) { ensureColumns_(os, ['Tgl Diterima']); col = headerIndex_(os)['tgl diterima']; }
+      os.getRange(r.index, col + 1).setValue(new Date()).setNumberFormat('d mmm yyyy');
+    }
     // Tahap 4 = lunas. Kalau diturunkan dari tahap 4, tanda lunas ikut dilepas.
     if (h['lunas'] >= 0) {
       if (step === 4) os.getRange(r.index, h['lunas'] + 1).setValue(true);
@@ -389,8 +410,8 @@ function editProduct_(body) {
 
 // id barang & nama barang (huruf kecil) -> true jika pre-order
 function productPoMap_() {
-  const map = { byId: {}, byName: {} };
-  readProducts_().rows.forEach(r => { const p = toProduct_(r.values, r.col); map.byId[p.id] = p.po; map.byName[p.name.toLowerCase()] = p.po; });
+  const map = { byId: {}, byName: {}, unitById: {}, unitByName: {} };
+  readProducts_().rows.forEach(r => { const p = toProduct_(r.values, r.col); map.byId[p.id] = p.po; map.byName[p.name.toLowerCase()] = p.po; map.unitById[p.id] = p.satuan; map.unitByName[p.name.toLowerCase()] = p.satuan; });
   return map;
 }
 
@@ -665,21 +686,21 @@ function invoicePdf_(o) {
   const base = {}; base[A.FONT_FAMILY] = 'Arial'; base[A.FONT_SIZE] = 8; base[A.FOREGROUND_COLOR] = '#111827';
   body.setAttributes(base);
   const tiny = p => { p.setSpacingBefore(0).setSpacingAfter(0).setLineSpacing(1).editAsText().setFontSize(1); return p; };
-  const half = () => {
+  const half = h => {
     const t = body.appendTable([['']]);
     t.setBorderWidth(0);
-    t.getRow(0).setMinimumHeight(390); // setengah A4 = ukuran A5
+    t.getRow(0).setMinimumHeight(h); // kira-kira setengah A4 = ukuran A5
     const c = t.getCell(0, 0);
     c.setWidth(551).setPaddingTop(0).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
     tiny(c.getChild(0).asParagraph());
     invoiceCopy_(c, o);
   };
   tiny(body.getChild(0).asParagraph());
-  half();
+  half(372);
   const cut = body.appendParagraph('✂  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -');
-  cut.setSpacingBefore(2).setSpacingAfter(2).setLineSpacing(1).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  cut.setSpacingBefore(0).setSpacingAfter(20).setLineSpacing(1).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
   cut.editAsText().setFontSize(6).setForegroundColor('#9ca3af');
-  half();
+  half(390);
   tiny(body.appendParagraph(''));
 
   doc.saveAndClose();
@@ -692,7 +713,7 @@ function invoicePdf_(o) {
 // Isi satu lembar invoice (ukuran A5 mendatar) di dalam sel tabel
 function invoiceCopy_(body, o) {
   const GRAY = '#6b7280';
-  const style = (el, size, bold, color) => { const tx = el.editAsText(); tx.setFontSize(size); tx.setBold(!!bold); if (color) tx.setForegroundColor(color); return el; };
+  const style = (el, size, bold, color) => { const tx = el.editAsText(); tx.setFontSize(size); tx.setBold(!!bold); tx.setForegroundColor(color || '#111827'); return el; };
   const tight = p => p.setSpacingBefore(0).setSpacingAfter(0).setLineSpacing(1);
   const cellText = (cell, text, size, bold, color, align) => {
     const p = cell.getChild(0).asParagraph(); p.setText(text); tight(p); style(p, size, bold, color);
