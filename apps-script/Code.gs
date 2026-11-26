@@ -893,7 +893,11 @@ function nextOrderId_(date, prefix) {
   const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
   const monthKey = (prefix === 'ASA' ? 'orderCounter_' : 'orderCounter' + prefix + '_') + Utilities.formatDate(date, tz, 'yyyyMM');
   const props = PropertiesService.getScriptProperties();
-  const next = (Number(props.getProperty(monthKey)) || 0) + 1;
+  // Nomor yang sudah ada di tab Pesanan bulan ini (mis. diisi manual) ikut dihitung supaya tidak dobel
+  const mmyy = Utilities.formatDate(date, tz, 'MMyy');
+  const re = new RegExp('^' + prefix + '-\\d{2}' + mmyy + '-(\\d+)$', 'i');
+  const inSheet = table_(orderSheet_()).rows.reduce((m, r) => { const x = String(r.get('No. Pesanan')).trim().match(re); return x ? Math.max(m, Number(x[1])) : m; }, 0);
+  const next = Math.max(Number(props.getProperty(monthKey)) || 0, inSheet) + 1;
   props.setProperty(monthKey, String(next));
   return prefix + '-' + Utilities.formatDate(date, tz, 'ddMMyy') + '-' + String(next).padStart(3, '0');
 }
