@@ -38,7 +38,7 @@ const SESSION_DAYS = 30;
 const MAX_LOGIN_FAILS = 5;      // salah PIN berturut-turut sebelum dikunci
 const LOCK_MINUTES = 15;        // lama dikunci
 
-const ORDER_COLUMNS = ['Waktu', 'No. Pesanan', 'Nama', 'Alamat', 'Catatan', 'Barang', 'Total', 'Status', 'Username', 'No. WA', 'Lunas', 'Total Semula', 'Tgl Diterima'];
+const ORDER_COLUMNS = ['Waktu', 'No. Pesanan', 'Nama', 'Alamat', 'Catatan', 'Barang', 'Total', 'Status', 'Username', 'No. WA', 'Lunas', 'Total Semula', 'Tgl Diterima', 'Jenis', 'Tgl Sampai'];
 const DETAIL_COLUMNS = ['No. Pesanan', 'ID Barang', 'Nama Barang', 'Jumlah', 'Satuan', 'Harga', 'Subtotal'];
 const CUSTOMER_COLUMNS = ['nama', 'username', 'pin', 'alamat', 'no_wa', 'aktif', 'peran'];
 const SEPEDA_SUBS = ['bmx', 'mini', 'mtb', 'lipat', 'balap', 'city'];
@@ -242,26 +242,33 @@ function order_(order) {
     });
 
     const now = new Date();
-    const orderId = nextOrderId_(now);
-    const total = lines.reduce((a, l) => a + l.p.price * l.qty, 0);
-
     const os = orderSheet_();
-    const newRow = appendByHeader_(os, {
-      'Waktu': now, 'No. Pesanan': orderId, 'Nama': name, 'Alamat': address, 'Catatan': notes,
-      'Barang': itemsText_(lines.map(l => ({ n: l.p.name, q: l.qty, po: l.p.po }))),
-      'Total': total, 'Status': 'Baru', 'Username': customer.username,
-      'No. WA': customer.noWa ? "'" + customer.noWa : '', 'Lunas': false
-    });
-    const lunasCol = headerIndex_(os)['lunas'];
-    if (lunasCol >= 0) os.getRange(newRow, lunasCol + 1).insertCheckboxes();
+    ensureColumns_(os, ['Jenis']);
     const det = detailSheet_();
-    lines.forEach(l => appendByHeader_(det, {
-      'No. Pesanan': orderId, 'ID Barang': l.p.id, 'Nama Barang': l.p.name, 'Jumlah': l.qty,
-      'Satuan': l.p.satuan, 'Harga': l.p.price, 'Subtotal': l.p.price * l.qty
-    }));
+    // Barang ready -> nomor ASA-..., barang pre-order -> nomor PO-... (urutan sendiri)
+    const groups = [{ jenis: 'Reguler', lines: lines.filter(l => !l.p.po) }, { jenis: 'PO', lines: lines.filter(l => l.p.po) }].filter(g => g.lines.length);
+    const orders = groups.map(g => {
+      const no = nextOrderId_(now, g.jenis === 'PO' ? 'PO' : 'ASA');
+      const tot = g.lines.reduce((a, l) => a + l.p.price * l.qty, 0);
+      const newRow = appendByHeader_(os, {
+        'Waktu': now, 'No. Pesanan': no, 'Nama': name, 'Alamat': address, 'Catatan': notes,
+        'Barang': itemsText_(g.lines.map(l => ({ n: l.p.name, q: l.qty, po: l.p.po }))),
+        'Total': tot, 'Status': 'Baru', 'Username': customer.username,
+        'No. WA': customer.noWa ? "'" + customer.noWa : '', 'Lunas': false, 'Jenis': g.jenis
+      });
+      const lunasCol = headerIndex_(os)['lunas'];
+      if (lunasCol >= 0) os.getRange(newRow, lunasCol + 1).insertCheckboxes();
+      g.lines.forEach(l => appendByHeader_(det, {
+        'No. Pesanan': no, 'ID Barang': l.p.id, 'Nama Barang': l.p.name, 'Jumlah': l.qty,
+        'Satuan': l.p.satuan, 'Harga': l.p.price, 'Subtotal': l.p.price * l.qty
+      }));
+      return { no: no, jenis: g.jenis, total: tot };
+    });
+    const orderId = orders.map(o => o.no).join(' + ');
+    const total = orders.reduce((a, o) => a + o.total, 0);
 
     try { notifyNewOrder_({ no: orderId, nama: name, username: customer.username, alamat: address, catatan: notes, total: total, items: lines.map(l => ({ n: l.p.name, q: l.qty, p: l.p.price, po: l.p.po })) }); } catch (e) { console.warn('notif gagal', e); }
-    return { ok: true, orderId: orderId, total: total, customer: { nama: name } };
+    return { ok: true, orderId: orderId, orders: orders, total: total, customer: { nama: name } };
   } finally {
     lock.releaseLock();
   }
@@ -305,18 +312,33 @@ function orderFromRow_(r, details, tz, poMap) {
     total: num_(r.get('Total')),
     oldTotal: num_(r.get('Total Semula')),
     editable: !!details[no],
+    jenis: orderType_(r),
     jatuhTempo: dueDate_(r, d, tz),
     items: items
   };
 }
 
+function orderType_(r) {
+  const j = String(r.get('Jenis')).trim().toLowerCase();
+  if (j) return j.indexOf('po') === 0 || j.indexOf('pre') === 0 ? 'PO' : 'Reguler';
+  return /^PO-/i.test(String(r.get('No. Pesanan')).trim()) ? 'PO' : 'Reguler';
+}
+
+// Pesanan PO: jatuh tempo = tanggal barang PO sampai ke pelanggan (kolom "Tgl Sampai", tahap 3) + 1 bulan.
 // Jatuh tempo = tanggal pesanan diterima toko (kolom "Tgl Diterima") + 1 bulan.
 // Pesanan lama yang sudah diterima tapi belum punya tanggal: dihitung dari tanggal pesan.
 function dueDate_(r, orderDate, tz) {
   const status = normalizeStatus_(r.get('Status'));
   if (status === 'Baru' || status === 'Dibatalkan') return null;
-  const acc = r.get('Tgl Diterima');
-  const base = acc instanceof Date ? acc : orderDate;
+  let base;
+  if (orderType_(r) === 'PO') {
+    if (status !== 'Sampai' && status !== 'Selesai') return null; // barang PO belum diserahkan
+    const sampai = r.get('Tgl Sampai');
+    base = sampai instanceof Date ? sampai : orderDate;
+  } else {
+    const acc = r.get('Tgl Diterima');
+    base = acc instanceof Date ? acc : orderDate;
+  }
   if (!base) return null;
   const y = Number(Utilities.formatDate(base, tz, 'yyyy')), m = Number(Utilities.formatDate(base, tz, 'M')), day = Number(Utilities.formatDate(base, tz, 'd'));
   const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); // 31 Jan -> 28/29 Feb
@@ -337,7 +359,7 @@ function normalizeStatus_(s) {
   if (v.indexOf('batal') >= 0) return 'Dibatalkan';
   if (v.indexOf('selesai') === 0 || v === 'beres') return 'Selesai';
   if (v.indexOf('sampai') >= 0 || v.indexOf('kirim') >= 0 || v.indexOf('pelanggan') >= 0) return 'Sampai';
-  if (v.indexOf('proses') >= 0) return 'Diproses';
+  if (v.indexOf('proses') >= 0 || v.indexOf('datang') >= 0) return 'Diproses';
   if (v.indexOf('terima') >= 0) return 'Diterima';
   return 'Baru';
 }
@@ -358,7 +380,14 @@ function setStatus_(body) {
     if (!r) return { ok: false, error: 'notfound', message: 'Pesanan tidak ditemukan' };
     const h = headerIndex_(os);
     const before = STATUS_STEPS.indexOf(normalizeStatus_(r.get('Status')));
-    os.getRange(r.index, h['status'] + 1).setValue(STATUS_STEPS[step]);
+    const isPO = orderType_(r) === 'PO';
+    os.getRange(r.index, h['status'] + 1).setValue(isPO && step === 2 ? 'Barang datang' : STATUS_STEPS[step]);
+    // Catat tanggal barang sampai ke pelanggan (untuk jatuh tempo pesanan PO)
+    if (step >= 3 && before < 3 && !(r.get('Tgl Sampai') instanceof Date)) {
+      let col = h['tgl sampai'];
+      if (col < 0) { ensureColumns_(os, ['Tgl Sampai']); col = headerIndex_(os)['tgl sampai']; }
+      os.getRange(r.index, col + 1).setValue(new Date()).setNumberFormat('d mmm yyyy');
+    }
     // Catat tanggal pesanan diterima toko (sekali saja) untuk menghitung jatuh tempo
     if (step >= 1 && before === 0 && !(r.get('Tgl Diterima') instanceof Date)) {
       let col = h['tgl diterima'];
@@ -517,6 +546,55 @@ function cancelOrder_(body) {
   }
 }
 
+// ---------- pesanan lama yang isinya campur ready + PO -> dipecah jadi pesanan ASA dan PO ----------
+
+/** Menu ASA > Pisahkan PO dari pesanan lama (cukup dijalankan sekali). */
+function pisahkanPoLama() {
+  const ui = SpreadsheetApp.getUi();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) { ui.alert('Sedang ada proses lain, coba lagi sebentar.'); return; }
+  const done = [];
+  try {
+    const os = orderSheet_();
+    ensureColumns_(os, ['Jenis']);
+    const h = headerIndex_(os);
+    const ds = detailSheet_();
+    const dh = headerIndex_(ds);
+    const pm = productPoMap_();
+    const details = detailMap_();
+    table_(os).rows.forEach(r => {
+      const no = String(r.get('No. Pesanan')).trim();
+      if (!no || orderType_(r) === 'PO' || normalizeStatus_(r.get('Status')) === 'Dibatalkan' || !details[no]) return;
+      const isPo = d => !!((d.item.id && pm.byId[d.item.id]) || pm.byName[d.item.n.toLowerCase()]);
+      const po = details[no].filter(isPo), ready = details[no].filter(d => !isPo(d));
+      if (!po.length || !ready.length) return;
+
+      const w = r.get('Waktu');
+      const poNo = nextOrderId_(w instanceof Date ? w : new Date(), 'PO');
+      const poTotal = po.reduce((a, d) => a + d.item.q * d.item.p, 0);
+      const readyTotal = ready.reduce((a, d) => a + d.item.q * d.item.p, 0);
+      const wa = String(r.get('No. WA')).trim();
+      const acc = r.get('Tgl Diterima');
+      const newRow = appendByHeader_(os, {
+        'Waktu': w, 'No. Pesanan': poNo, 'Nama': r.get('Nama'), 'Alamat': r.get('Alamat'), 'Catatan': r.get('Catatan'),
+        'Barang': itemsText_(po.map(d => ({ n: d.item.n, q: d.item.q, po: true }))), 'Total': poTotal,
+        'Status': normalizeStatus_(r.get('Status')) === 'Baru' ? 'Baru' : 'Diterima',
+        'Username': r.get('Username'), 'No. WA': wa ? "'" + wa : '', 'Lunas': false, 'Jenis': 'PO',
+        'Tgl Diterima': acc instanceof Date ? acc : ''
+      });
+      if (h['lunas'] >= 0) os.getRange(newRow, h['lunas'] + 1).insertCheckboxes();
+      po.forEach(d => ds.getRange(d.index, dh['no. pesanan'] + 1).setValue(poNo));
+      os.getRange(r.index, h['barang'] + 1).setValue(itemsText_(ready.map(d => ({ n: d.item.n, q: d.item.q }))));
+      os.getRange(r.index, h['total'] + 1).setValue(readyTotal);
+      os.getRange(r.index, headerIndex_(os)['jenis'] + 1).setValue('Reguler');
+      done.push(no + ' (Rp ' + fmt_(readyTotal) + ')  +  ' + poNo + ' (Rp ' + fmt_(poTotal) + ')');
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  ui.alert('Pisahkan PO', done.length ? 'Sudah dipisah:\n\n' + done.join('\n') : 'Tidak ada pesanan lama yang isinya campur barang ready dan PO.', ui.ButtonSet.OK);
+}
+
 // ---------- notifikasi pesanan baru (Telegram + email) ----------
 
 function notifyNewOrder_(o) {
@@ -597,6 +675,8 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('ASA')
     .addItem('Buat invoice PDF (baris yang dipilih)', 'buatInvoicePdf')
+    .addSeparator()
+    .addItem('Pisahkan PO dari pesanan lama', 'pisahkanPoLama')
     .addSeparator()
     .addItem('Hubungkan notifikasi Telegram', 'hubungkanTelegram')
     .addItem('Tes notifikasi', 'tesNotifikasi')
@@ -806,14 +886,16 @@ function invoiceCopy_(body, o) {
  * Format: ASA-DDMMYY-XXX
  *   DDMMYY = tanggal, bulan, tahun pesanan
  *   XXX    = nomor urut dalam bulan itu (001, 002, ...), kembali ke 001 tiap awal bulan
+ * Pesanan pre-order memakai awalan PO- dengan nomor urut sendiri (PO-DDMMYY-XXX).
  */
-function nextOrderId_(date) {
+function nextOrderId_(date, prefix) {
+  prefix = prefix || 'ASA';
   const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
-  const monthKey = 'orderCounter_' + Utilities.formatDate(date, tz, 'yyyyMM');
+  const monthKey = (prefix === 'ASA' ? 'orderCounter_' : 'orderCounter' + prefix + '_') + Utilities.formatDate(date, tz, 'yyyyMM');
   const props = PropertiesService.getScriptProperties();
   const next = (Number(props.getProperty(monthKey)) || 0) + 1;
   props.setProperty(monthKey, String(next));
-  return 'ASA-' + Utilities.formatDate(date, tz, 'ddMMyy') + '-' + String(next).padStart(3, '0');
+  return prefix + '-' + Utilities.formatDate(date, tz, 'ddMMyy') + '-' + String(next).padStart(3, '0');
 }
 
 /** Jalankan manual untuk mengulang nomor urut bulan ini dari 001. */
