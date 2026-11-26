@@ -626,11 +626,9 @@ function buatInvoicePdf() {
   const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
   const details = detailMap_();
   const o = orderFromRow_(r, details, tz);
-  const w = r.get('Waktu');
-  const tglPanjang = d => Number(Utilities.formatDate(d, tz, 'd')) + ' ' + BULAN_PANJANG[Number(Utilities.formatDate(d, tz, 'M')) - 1] + ' ' + Utilities.formatDate(d, tz, 'yyyy');
-  // Tanggal invoice = hari invoice dicetak (tanggal tagihan); tanggal pesan ditulis kecil di bawahnya
-  o.tglPanjang = tglPanjang(new Date());
-  o.tglPesan = w instanceof Date ? tglPanjang(w) : o.tgl;
+  // Tanggal invoice = hari invoice dicetak (tanggal tagihan); tanggal pesan sudah ada di nomor pesanan
+  const now = new Date();
+  o.tglPanjang = Number(Utilities.formatDate(now, tz, 'd')) + ' ' + BULAN_PANJANG[Number(Utilities.formatDate(now, tz, 'M')) - 1] + ' ' + Utilities.formatDate(now, tz, 'yyyy');
   o.wa = String(r.get('No. WA')).replace(/^'/, '').trim();
   if (!o.wa) { const c = findCustomer_(normalizeUsername_(r.get('Username'))); if (c) o.wa = c.noWa; }
   if (details[o.no]) details[o.no].forEach((d, k) => { o.items[k].u = d.item.u; });
@@ -725,9 +723,7 @@ function invoiceCopy_(body, o) {
   if (sub) addLine(c1, sub, 7, false, GRAY);
   cellText(c2, o.title || 'INVOICE', o.title ? 11 : 13, true, o.poNote ? '#b45309' : null, RIGHT);
   addLine(c2, o.no, 9, true, null, RIGHT);
-  addLine(c2, o.tglPanjang, 8, false, GRAY, RIGHT);
-  if (o.tglPesan && o.tglPesan !== o.tglPanjang) addLine(c2, 'Dipesan ' + o.tglPesan, 6.5, false, GRAY, RIGHT);
-  tight(body.appendParagraph('')).editAsText().setFontSize(3);
+  addLine(c2, o.tglPanjang, 8, false, GRAY, RIGHT);  tight(body.appendParagraph('')).editAsText().setFontSize(3);
   body.appendHorizontalRule();
 
   // Tabel barang
