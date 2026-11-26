@@ -347,7 +347,7 @@ const gicon = g => g && g.icon ? `<span class="mico" aria-hidden="true" style="-
 // ==========================================================
 const S = { v: 'home', group: null, sub: 'Semua', sort: 'default', q: '', cq: '', cart: [], user: null, token: '',
   sheet: null, products: [], loaded: false, loadError: false, apiVersion: 1,
-  orders: null, ordersLoading: false, ordersError: '', open: null, hf: 'semua', hq: '', sf: 'tampil', sq: '' };
+  orders: null, ordersLoading: false, ordersError: '', open: null, hf: 'semua', hq: '', sf: 'tampil', sq: '', sg: 'Semua' };
 const hist = [];
 const $ = id => document.getElementById(id);
 const rp = n => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
@@ -380,7 +380,7 @@ function normalizeProduct(p, i) {
     price: p.price === undefined || p.price === null ? null : n(p.price),
     stock: n(p.stock), group: g ? g.n : group, sub: (cat === 'pre-order' || cat === 'po') ? '' : cat,
     image: String(p.image || '').trim(), keterangan: String(p.keterangan || '').trim(),
-    satuan: String(p.satuan || '').trim(), min: n(p.min), sorotan: !!p.sorotan, po, hidden: !!p.hidden
+    satuan: String(p.satuan || '').trim(), min: n(p.min), sorotan: !!p.sorotan, po, hidden: !!p.hidden, minStock: n(p.minStock)
   };
 }
 
@@ -559,7 +559,8 @@ function homeBody() {
   ${sorotan.length ? `<p class="h sec">Sorotan</p><div class="grid2 stagger">${sorotan.map((p, i) => pcard(p, i + 4)).join('')}</div>` : ''}`;
 }
 // ---------- pemilik: beranda & daftar barang ----------
-const lowStock = p => !p.po && !p.hidden && p.stock > 0 && p.stock <= 3;
+const lowAt = p => p.minStock || 3; // batas stok hampir habis (kolom min_stok, default 3)
+const lowStock = p => !p.po && !p.hidden && p.stock > 0 && p.stock <= lowAt(p);
 function ownerHome() {
   if (!S.orders && !S.ordersLoading && S.apiVersion >= 2) setTimeout(() => loadOrders(), 0);
   const os = S.orders || [];
@@ -582,14 +583,15 @@ function ownerHome() {
 }
 const STOCK_FILTERS = [['tampil', 'Tampil'], ['low', 'Hampir habis'], ['habis', 'Habis'], ['po', 'PO'], ['hidden', 'Disembunyikan']];
 const stockFilter = (k, p) => k === 'hidden' ? p.hidden : !p.hidden && (k === 'po' ? p.po : k === 'habis' ? !p.po && p.stock <= 0 : k === 'low' ? lowStock(p) : (p.po || p.stock > 0));
+const inStockGroup = p => S.sg === 'Semua' || p.group === S.sg;
 function stockBody() {
   const q = S.sq.trim().toLowerCase();
-  const items = S.products.filter(p => stockFilter(S.sf, p) && (!q || `#${p.id} ${p.id} ${p.name} ${p.sub} ${p.group}`.toLowerCase().includes(q))).sort((a, b) => a.id - b.id);
+  const items = S.products.filter(p => inStockGroup(p) && stockFilter(S.sf, p) && (!q || `#${p.id} ${p.id} ${p.name} ${p.sub} ${p.group}`.toLowerCase().includes(q))).sort((a, b) => a.id - b.id);
   if (!items.length) return `<div class="empty">${ic('box')}<b style="color:var(--fg)">Tidak ada barang</b><span class="sm">Coba filter atau kata lain</span></div>`;
   const pill = p => p.hidden ? '<span class="st" style="background:var(--soft);color:var(--muted)">Disembunyikan</span>'
     : p.po ? '<span class="st" style="background:var(--amber-tint);color:var(--amber-text)">PO</span>'
     : p.stock <= 0 ? '<span class="st" style="background:var(--soft);color:var(--muted)">Habis</span>'
-    : `<span class="st" style="background:${p.stock <= 3 ? 'var(--red-tint);color:var(--red-text)' : 'var(--green-tint);color:var(--green-text)'}">${p.stock <= 3 ? 'Sisa' : 'Stok'} ${p.stock}</span>`;
+    : `<span class="st" style="background:${lowStock(p) ? 'var(--red-tint);color:var(--red-text)' : 'var(--green-tint);color:var(--green-text)'}">${lowStock(p) ? 'Sisa' : 'Stok'} ${p.stock}</span>`;
   return `<p class="count" style="margin:0">${items.length} barang · ketuk untuk kelola</p><div class="list">${items.map(p => `<button class="row" data-item="${p.id}" style="width:100%;background:none;border-left:none;border-right:none;border-top:none;text-align:left;cursor:pointer"><span class="th">${thumb(p)}</span><span class="info" style="min-width:0;flex:1"><span class="sm" style="font-weight:700">#${p.id}</span><span class="nm" style="display:block">${esc(p.name)}</span><span class="sm">${esc(p.sub ? subLabel(p.sub) : p.group)} · ${rp(p.price)}</span></span>${pill(p)}</button>`).join('')}</div>`;
 }
 function listBody() {
@@ -610,9 +612,12 @@ const V = {
     <div id="homeBody">${homeBody()}</div>`;
   },
   stock: () => {
-    const n = k => S.products.filter(p => stockFilter(k, p)).length;
+    const n = k => S.products.filter(p => inStockGroup(p) && stockFilter(k, p)).length;
+    const gs = GROUPS.map(g => g.n).filter(g => S.products.some(p => p.group === g));
+    const gn = g => S.products.filter(p => g === 'Semua' || p.group === g).length;
     return `<div style="display:flex;gap:8px"><label class="srch" style="flex:1;margin:0">${ic('search')}<input id="sq" type="search" placeholder="Cari nama atau ID…" value="${esc(S.sq)}" autocomplete="off"></label><button class="btn" data-addp="1" style="width:auto;padding:0 14px;height:44px">${ic('plus')}Tambah</button></div>
-      <div class="chips" style="margin:0">${STOCK_FILTERS.map(([k, l]) => `<button class="chip ${S.sf === k ? 'on' : ''}" data-sf="${k}">${l} (${n(k)})</button>`).join('')}</div>
+      ${gs.length > 1 ? `<select class="sel" id="sg" aria-label="Kelompok barang" style="margin:0">${['Semua', ...gs].map(g => `<option value="${esc(g)}"${S.sg === g ? ' selected' : ''}>${g === 'Semua' ? 'Semua kelompok' : esc(g)} (${gn(g)})</option>`).join('')}</select>` : ''}
+      <div class="chips" style="margin:0" id="sfChips">${STOCK_FILTERS.map(([k, l]) => `<button class="chip ${S.sf === k ? 'on' : ''}" data-sf="${k}">${l} (${n(k)})</button>`).join('')}</div>
       <div id="stockBody" style="display:flex;flex-direction:column;gap:8px">${stockBody()}</div>`;
   },
   cats: () => `<div class="list stagger">${GROUPS.map((g, i) => { const n = inGroup(g).length; return `<button class="row${n ? '' : ' soon'}" data-group="${g.n}" style="--i:${i}"><span class="th">${gicon(g)}</span><span class="info"><span class="nm" style="font-size:15px">${g.n}</span>${n ? `<span class="sm">${n} barang</span>` : ''}</span><span style="color:var(--faint);font-size:20px">${ic('chev')}</span></button>`; }).join('')}</div>`,
@@ -867,7 +872,7 @@ function sheetHTML() {
       <div id="np-readyrow" style="display:flex;flex-direction:column;gap:10px">
         <div><label class="fl" for="np-group">Kelompok</label><select class="inp" id="np-group">${groups.map(g => `<option>${esc(g)}</option>`).join('')}</select></div>
         <div><label class="fl" for="np-cat">Kategori <span style="color:var(--red)">*</span></label><input class="inp" id="np-cat" list="np-cats" placeholder="bmx, mini, mtb, ban luar…" autocapitalize="none"><datalist id="np-cats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
-        <div><label class="fl" for="np-stock">Stok awal</label><input class="inp" id="np-stock" inputmode="numeric" value="0"></div>
+        <div style="display:flex;gap:8px"><div style="flex:1"><label class="fl" for="np-stock">Stok awal</label><input class="inp" id="np-stock" inputmode="numeric" value="0"></div><div style="flex:1"><label class="fl" for="np-minstock">Batas hampir habis</label><input class="inp" id="np-minstock" inputmode="numeric" placeholder="3"></div></div>
       </div>
       <div style="display:flex;gap:8px"><div style="flex:2"><label class="fl" for="np-price">Harga <span style="color:var(--red)">*</span></label><input class="inp" id="np-price" inputmode="numeric" placeholder="Rp"></div><div style="flex:1"><label class="fl" for="np-unit">Satuan</label><input class="inp" id="np-unit" value="unit" maxlength="20"></div></div>
       <div><label class="fl" for="np-min">Minimal beli <span class="sm">(kosongkan = aturan biasa)</span></label><input class="inp" id="np-min" inputmode="numeric"></div>
@@ -916,6 +921,7 @@ function ownerPanel(p) {
       <span class="sm">${esc(p.satuan || 'unit')}</span></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="sm" style="align-self:center">Barang datang:</span>${[1, 5, 10, 20].map(n => `<button class="chip" data-padd="${n}" style="height:32px;padding:0 12px">+${n}</button>`).join('')}</div>
     <div class="ectl"><span class="fl" style="width:48px;margin:0">Harga</span><label class="eprice"><span>Rp</span><input id="pprice" inputmode="numeric" value="${num(p.price)}" aria-label="Harga ${esc(p.name)}"><span>/${esc(p.satuan || 'unit')}</span></label></div>
+    <div class="ectl"><span class="fl" style="width:48px;margin:0;line-height:1.15">Batas</span><input class="inp" id="pmin" inputmode="numeric" value="${p.minStock || ''}" placeholder="3" style="width:70px;height:36px" aria-label="Batas stok hampir habis"><span class="sm">Peringatan "stok hampir habis" kalau stok ${p.minStock || 3} atau kurang</span></div>
     <div class="sm" id="pnote">Sekarang: stok ${p.stock} · ${rp(p.price)}</div>
     <button class="btn" data-psave="${p.id}" id="psaveBtn">${ic('check')}Simpan ke Google Sheets</button></div>${poTools(p)}${stockHistory(p)}`;
 }
@@ -993,7 +999,7 @@ async function saveNewProduct(e) {
   e.preventDefault();
   const po = document.querySelector('[data-addpo].on')?.dataset.addpo === '1';
   const v = id => ($(id)?.value || '').trim();
-  const body = { action: 'add_product', name: v('np-name'), po, kelompok: v('np-group'), category: v('np-cat'), stock: digits(v('np-stock')), price: digits(v('np-price')), satuan: v('np-unit'), min: digits(v('np-min')), keterangan: v('np-ket'), image: v('np-img') };
+  const body = { action: 'add_product', name: v('np-name'), po, kelompok: v('np-group'), category: v('np-cat'), stock: digits(v('np-stock')), price: digits(v('np-price')), satuan: v('np-unit'), min: digits(v('np-min')), minStock: digits(v('np-minstock')), keterangan: v('np-ket'), image: v('np-img') };
   if (!body.name) { toast('Nama barang wajib diisi', true); $('np-name').focus(); return; }
   if (!po && !body.category) { toast('Isi kategori barang', true); $('np-cat').focus(); return; }
   if (!(body.price > 0)) { toast('Harga harus diisi', true); $('np-price').focus(); return; }
@@ -1034,16 +1040,17 @@ function ownerNote(p) {
   const parts = [];
   if (st !== p.stock) parts.push(`stok ${p.stock} → ${st}`);
   if (pr !== p.price) parts.push(`harga ${rp(p.price)} → ${rp(pr)}`);
+  const mn = digits($('pmin').value); if (mn !== p.minStock) parts.push(`batas ${p.minStock || 3} → ${mn || 3}`);
   $('pnote').textContent = parts.length ? 'Akan diubah: ' + parts.join(' · ') : `Sekarang: stok ${p.stock} · ${rp(p.price)}`;
 }
 async function saveProduct(id) {
   const p = prod(id); if (!p) return;
-  const stock = digits($('pstock').value), price = digits($('pprice').value);
+  const stock = digits($('pstock').value), price = digits($('pprice').value), minStock = digits($('pmin').value);
   if (!(price > 0)) { toast('Harga harus diisi', true); $('pprice').focus(); return; }
-  if (stock === p.stock && price === p.price) { toast('Tidak ada perubahan'); return; }
+  if (stock === p.stock && price === p.price && minStock === p.minStock) { toast('Tidak ada perubahan'); return; }
   const btn = $('psaveBtn'); btn.disabled = true; btn.textContent = 'Menyimpan…';
   try {
-    const r = await callScript({ action: 'edit_product', token: S.token, id: p.id, stock, price });
+    const r = await callScript({ action: 'edit_product', token: S.token, id: p.id, stock, price, minStock });
     if (!r.ok) {
       if (r.error === 'auth') { closeSheet(); await signedOut('Sesi Anda sudah berakhir. Silakan masuk lagi.'); return; }
       toast(r.message || 'Perubahan belum tersimpan', true); return;
@@ -1210,7 +1217,8 @@ $('phone').addEventListener('input', e => {
   if (el.id === 'cq') { S.cq = el.value; $('listBody').innerHTML = listBody(); }
   if (el.id === 'sq') { S.sq = el.value; $('stockBody').innerHTML = stockBody(); }
   if (el.id === 'np-price') { const v = digits(el.value); el.value = v ? num(v) : ''; }
-  if (el.id === 'np-stock' || el.id === 'np-min') el.value = el.value.replace(/\D/g, '');
+  if (el.id === 'np-stock' || el.id === 'np-min' || el.id === 'np-minstock') el.value = el.value.replace(/\D/g, '');
+  if (el.id === 'pmin') { el.value = el.value.replace(/\D/g, ''); ownerNote(prod(S.sheet.slice(5))); }
   if (el.id === 'hq') { S.hq = el.value; S.open = null; $('histBody').innerHTML = histList(); }
   if (el.id === 'lp') el.value = el.value.replace(/\D/g, '').slice(0, 6);
   if (el.id === 'pstock') { el.value = el.value.replace(/\D/g, ''); ownerNote(prod(S.sheet.slice(5))); }
@@ -1219,7 +1227,10 @@ $('phone').addEventListener('input', e => {
   if (el.dataset && el.dataset.afill) arriveNote();
   if (el.id === 'pprice') { const v = digits(el.value); el.value = v ? num(v) : ''; ownerNote(prod(S.sheet.slice(5))); }
 });
-$('phone').addEventListener('change', e => { if (e.target.id === 'sort') { S.sort = e.target.value; $('listBody').innerHTML = listBody(); } });
+$('phone').addEventListener('change', e => {
+  if (e.target.id === 'sort') { S.sort = e.target.value; $('listBody').innerHTML = listBody(); }
+  if (e.target.id === 'sg') { S.sg = e.target.value; render(); }
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.sheet) closeSheet(); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => chrome());
 

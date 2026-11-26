@@ -20,7 +20,8 @@
  *  - Siapkan sheet     : membuat tab & kolom yang dibutuhkan (data lama tidak dihapus)
  *
  * Tab produk (tab paling kiri, baris 1 = judul, urutan kolom bebas):
- *   id | name | price | stock | category | image | keterangan | kelompok | satuan | min_beli | sorotan | sembunyikan
+ *   id | name | price | stock | category | image | keterangan | kelompok | satuan | min_beli | sorotan | sembunyikan | min_stok
+ *   (min_stok = batas "stok hampir habis" untuk barang itu; kosong = 3)
  *   (sembunyikan dicentang = barang tidak terlihat oleh pelanggan, barisnya tetap disimpan supaya ID & riwayat aman)
  *   - kelompok : Sepeda, Ban, Sparepart, Aksesoris, Baby walker, Roda tiga, Tolo car, Pre-order
  *                (boleh kosong untuk sepeda: bmx/mini/mtb otomatis masuk "Sepeda", pre-order masuk "Pre-order")
@@ -451,6 +452,7 @@ function editProduct_(body) {
     const oldStock = toProduct_(row.values, row.col).stock;
     if (stock !== oldStock) { const log = []; changeStock_(prod, row, stock - oldStock, 'Ubah stok (web)', log); logStock_(log); }
     prod.sheet.getRange(row.index, prod.col.price + 1).setValue(price);
+    if (body.minStock !== undefined) setMinStock_(prod, row.index, body.minStock);
     const fresh = readProducts_().rows.find(r => r.index === row.index);
     return { ok: true, product: toProduct_(fresh.values, fresh.col) };
   } finally {
@@ -770,6 +772,14 @@ function setHidden_(body) {
   }
 }
 
+// Batas stok hampir habis per barang (kolom min_stok dibuat kalau belum ada; 0 / kosong = pakai batas umum 3)
+function setMinStock_(prod, rowIndex, value) {
+  const v = Math.floor(Number(value) || 0);
+  let col = prod.col.minStock;
+  if (col < 0) { if (!v) return; ensureColumns_(prod.sheet, ['min_stok']); col = readProducts_().col.minStock; }
+  prod.sheet.getRange(rowIndex, col + 1).setValue(v > 0 ? v : '');
+}
+
 // ID barang baru = ID terbesar + 1 (ID lama tidak pernah dipakai ulang)
 function nextProductId_(prod) {
   return prod.rows.reduce((m, r) => Math.max(m, toProduct_(r.values, r.col).id), 0) + 1;
@@ -805,6 +815,7 @@ function addProduct_(body) {
     set(c.satuan, clean_(body.satuan, 20) || 'unit');
     if (!po) set(c.group, clean_(body.kelompok, 40)); // pre-order dibiarkan kosong supaya masuk kelompok Pre-order
     const min = Math.floor(Number(body.min) || 0); if (min > 0) set(c.min, min);
+    if (Number(body.minStock) > 0) setMinStock_(prod, target, body.minStock);
     if (stock > 0) logStock_([{ id: id, name: name, delta: stock, stock: stock, note: 'Barang baru' }]);
     const fresh = readProducts_().rows.find(r => r.index === target);
     return { ok: true, product: toProduct_(fresh.values, fresh.col) };
@@ -1008,7 +1019,7 @@ function siapkanSheet() {
   detailSheet_();
 
   const ps = productSheet_();
-  ensureColumns_(ps, ['kelompok', 'satuan', 'min_beli', 'sorotan', 'sembunyikan']);
+  ensureColumns_(ps, ['kelompok', 'satuan', 'min_beli', 'sorotan', 'sembunyikan', 'min_stok']);
   const ph = headerIndex_(ps);
   ps.getRange(2, ph['sorotan'] + 1, Math.max(ps.getMaxRows() - 1, 1), 1).insertCheckboxes();
   ps.getRange(2, ph['sembunyikan'] + 1, Math.max(ps.getMaxRows() - 1, 1), 1).insertCheckboxes();
@@ -1306,7 +1317,8 @@ function readProducts_() {
     min: find(['min_beli', 'minimal']),
     sorotan: find(['sorotan', 'unggulan']),
     preorder: find(['preorder', 'pre-order', 'po']),
-    hidden: find(['sembunyikan', 'hidden', 'arsip'])
+    hidden: find(['sembunyikan', 'hidden', 'arsip']),
+    minStock: find(['min_stok', 'stok_minimal', 'min stok'])
   };
   const rows = values.slice(1)
     .map((v, i) => ({ values: v, index: i + 2, col: col }))
@@ -1333,7 +1345,8 @@ function toProduct_(v, col) {
     min: num_(get(col.min)),
     sorotan: yes_(get(col.sorotan)),
     po: po,
-    hidden: yes_(get(col.hidden))
+    hidden: yes_(get(col.hidden)),
+    minStock: num_(get(col.minStock))
   };
 }
 
