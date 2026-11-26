@@ -611,6 +611,15 @@ function dueLine(o) {
   const note = late ? ` · lewat ${-days} hari` : days === 0 ? ' · hari ini' : soon ? ` · ${days} hari lagi` : '';
   return `<span class="sm" style="font-weight:700;color:${late ? 'var(--red)' : soon ? 'var(--amber-text)' : 'var(--fg)'}">Jatuh tempo: ${esc(o.jatuhTempo.label)}${note}</span>`;
 }
+// Rincian pesanan: barang ready dan pre-order (dikirim menyusul) ditampilkan terpisah
+function orderLines(o) {
+  const line = it => `<div class="ln"><span>${it.q} × ${esc(it.n)}${it.p ? `<br><span class="sm">@ ${rp(it.p)}</span>` : ''}</span><span>${it.p ? rp(it.p * it.q) : ''}</span></div>`;
+  const ready = o.items.filter(it => !it.po), po = o.items.filter(it => it.po);
+  if (!ready.length || !po.length) return (po.length ? '<div class="lbl" style="color:var(--amber-text)">⏳ Pre-order · dikirim setelah barang datang</div>' : '') + o.items.map(line).join('');
+  const sub = list => list.every(it => it.p) ? `<div class="ln sm" style="font-weight:700"><span>Subtotal</span><span>${rp(list.reduce((a, it) => a + it.p * it.q, 0))}</span></div>` : '';
+  return `<div class="lbl">📦 Barang ready</div>${ready.map(line).join('')}${sub(ready)}
+    <div class="lbl" style="color:var(--amber-text);margin-top:6px;border-top:1px dashed var(--line);padding-top:8px">⏳ Pre-order · dikirim setelah barang datang</div>${po.map(line).join('')}${sub(po)}`;
+}
 const orderTotal = o => o.items.length && o.items.every(i => i.p) ? o.items.reduce((a, b) => a + b.p * b.q, 0) : o.total;
 const payPill = o => o.lunas ? '<span class="st pay-yes">Lunas</span>' : '<span class="st pay-no">Belum lunas</span>';
 function orderCard(o, i) {
@@ -621,8 +630,8 @@ function orderCard(o, i) {
   ${isOwner() ? `<span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700">${ic('user')}${esc(o.nama)}</span>` : ''}
   <span class="steps" aria-hidden="true">${[1, 2, 3, 4].map(n => `<i class="${n <= (STEP[o.status] || 0) ? 'on' : ''}"></i>`).join('')}</span>
   <span class="sm" style="margin-top:-2px">${STEP_INFO[STEP[o.status] || 0]}</span>${dueLine(o)}
-  <span class="meta"><span>${esc(o.tgl)} · ${qty} barang${o.oldTotal ? ' · <span style="color:var(--amber-text);font-weight:700">diubah toko</span>' : ''}</span><span style="display:flex;align-items:center;gap:6px"><b>${rp(tot)}</b><span class="chev">${ic('chev')}</span></span></span></button>
-  ${open ? `<div class="det">${o.items.map(it => `<div class="ln"><span>${it.q} × ${esc(it.n)}${it.p ? `<br><span class="sm">@ ${rp(it.p)}</span>` : ''}</span><span>${it.p ? rp(it.p * it.q) : ''}</span></div>`).join('')}
+  <span class="meta"><span>${esc(o.tgl)} · ${qty} barang${o.items.some(it => it.po) ? ' · <span style="color:var(--amber-text);font-weight:700">ada PO</span>' : ''}${o.oldTotal ? ' · <span style="color:var(--amber-text);font-weight:700">diubah toko</span>' : ''}</span><span style="display:flex;align-items:center;gap:6px"><b>${rp(tot)}</b><span class="chev">${ic('chev')}</span></span></span></button>
+  ${open ? `<div class="det">${orderLines(o)}
     <div class="ln" style="border-top:1px dashed var(--line);padding-top:6px;font-weight:800"><span>Total</span><span>${rp(tot)}</span></div>
     <div class="ln"><span class="sm">Pembayaran</span>${payPill(o)}</div><div class="sm">Dikirim ke: ${esc(o.alamat)}</div>${o.catatan ? `<div class="sm">Catatan: ${esc(o.catatan)}</div>` : ''}
     ${o.oldTotal ? `<div class="sm" style="background:var(--amber-tint);border:1px solid var(--amber-line);color:var(--amber-text);border-radius:10px;padding:7px 10px">${isOwner() ? 'Pesanan ini sudah diubah.' : 'Jumlah atau harga pesanan ini sudah disesuaikan oleh toko.'} Semula total ${rp(o.oldTotal)}.</div>` : ''}
