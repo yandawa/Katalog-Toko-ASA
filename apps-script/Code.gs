@@ -20,7 +20,8 @@
  *  - Siapkan sheet     : membuat tab & kolom yang dibutuhkan (data lama tidak dihapus)
  *
  * Tab produk (tab paling kiri, baris 1 = judul, urutan kolom bebas):
- *   id | name | price | stock | category | image | keterangan | kelompok | satuan | min_beli | sorotan
+ *   id | name | price | stock | category | image | keterangan | kelompok | satuan | min_beli | sorotan | sembunyikan
+ *   (sembunyikan dicentang = barang tidak terlihat oleh pelanggan, barisnya tetap disimpan supaya ID & riwayat aman)
  *   - kelompok : Sepeda, Ban, Sparepart, Aksesoris, Baby walker, Roda tiga, Tolo car, Pre-order
  *                (boleh kosong untuk sepeda: bmx/mini/mtb otomatis masuk "Sepeda", pre-order masuk "Pre-order")
  *   - category : sub-kategori (bmx, mini, mtb, ban luar, rem, ...)
@@ -74,6 +75,8 @@ function doPost(e) {
       case 'product_info': return json_(productInfo_(body));
       case 'po_arrival': return json_(poArrival_(body));
       case 'set_preorder': return json_(setPreorder_(body));
+      case 'set_hidden': return json_(setHidden_(body));
+      case 'add_product': return json_(addProduct_(body));
       default: return json_({ ok: false, error: 'unknown', message: 'Aksi tidak dikenal' });
     }
   } catch (err) {
@@ -84,8 +87,7 @@ function doPost(e) {
 // ---------- katalog ----------
 
 function publicProducts_() {
-  return readProducts_().rows.map(r => {
-    const p = toProduct_(r.values, r.col);
+  return readProducts_().rows.map(r => toProduct_(r.values, r.col)).filter(p => !p.hidden).map(p => {
     delete p.price; // harga tidak dikirim ke pengunjung yang belum login
     return p;
   });
@@ -97,7 +99,7 @@ function productsForToken_(token) {
   return {
     ok: true, version: VERSION, auth: true,
     customer: publicCustomer_(customer),
-    products: readProducts_().rows.map(r => toProduct_(r.values, r.col))
+    products: readProducts_().rows.map(r => toProduct_(r.values, r.col)).filter(p => customer.owner || !p.hidden)
   };
 }
 
@@ -742,12 +744,91 @@ function setPreorder_(body) {
   }
 }
 
+// Pemilik: tampilkan / sembunyikan barang dari pelanggan
+function setHidden_(body) {
+  const customer = customerFromToken_(body.token);
+  if (!customer) return { ok: false, error: 'auth', message: 'Silakan masuk lagi' };
+  if (!customer.owner) return { ok: false, error: 'forbidden', message: 'Hanya pemilik toko' };
+  const id = String(Math.floor(Number(body.id)) || '');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    let prod = readProducts_();
+    if (prod.col.hidden < 0) { // kolom belum ada: buat di ujung kanan dengan kotak centang
+      ensureColumns_(prod.sheet, ['sembunyikan']);
+      prod = readProducts_();
+      const last = prod.rows.length ? prod.rows[prod.rows.length - 1].index : 2;
+      prod.sheet.getRange(2, prod.col.hidden + 1, Math.max(last - 1, 1), 1).insertCheckboxes();
+    }
+    const row = prod.rows.find(r => String(toProduct_(r.values, r.col).id) === id);
+    if (!row) return { ok: false, error: 'notfound', message: 'Barang tidak ditemukan' };
+    prod.sheet.getRange(row.index, prod.col.hidden + 1).setValue(!!body.hidden);
+    const fresh = readProducts_().rows.find(r => r.index === row.index);
+    return { ok: true, product: toProduct_(fresh.values, fresh.col) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ID barang baru = ID terbesar + 1 (ID lama tidak pernah dipakai ulang)
+function nextProductId_(prod) {
+  return prod.rows.reduce((m, r) => Math.max(m, toProduct_(r.values, r.col).id), 0) + 1;
+}
+
+// Pemilik: tambah barang baru dari web
+function addProduct_(body) {
+  const customer = customerFromToken_(body.token);
+  if (!customer) return { ok: false, error: 'auth', message: 'Silakan masuk lagi' };
+  if (!customer.owner) return { ok: false, error: 'forbidden', message: 'Hanya pemilik toko' };
+  const name = clean_(body.name, 120);
+  const po = !!body.po;
+  const category = po ? 'pre-order' : clean_(body.category, 40).toLowerCase();
+  const price = Math.round(Number(body.price));
+  const stock = po ? 0 : Math.floor(Number(body.stock) || 0);
+  if (!name) return { ok: false, error: 'invalid', message: 'Nama barang wajib diisi' };
+  if (!category) return { ok: false, error: 'invalid', message: 'Pilih kategori' };
+  if (!(price > 0)) return { ok: false, error: 'invalid', message: 'Harga harus diisi' };
+  if (!(stock >= 0 && stock <= 99999)) return { ok: false, error: 'invalid', message: 'Stok harus angka 0 atau lebih' };
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    const prod = readProducts_();
+    const c = prod.col;
+    if (c.id < 0 || c.name < 0 || c.price < 0 || c.stock < 0) return { ok: false, error: 'invalid', message: 'Kolom id / name / price / stock tidak ditemukan di tab produk' };
+    if (prod.rows.some(r => toProduct_(r.values, r.col).name.toLowerCase() === name.toLowerCase())) return { ok: false, error: 'invalid', message: 'Barang dengan nama "' + name + '" sudah ada' };
+    const id = nextProductId_(prod);
+    const target = (prod.rows.length ? prod.rows[prod.rows.length - 1].index : 1) + 1;
+    const set = (col, v) => { if (col >= 0) prod.sheet.getRange(target, col + 1).setValue(v); };
+    set(c.id, id); set(c.name, name); set(c.price, price); set(c.stock, stock); set(c.category, category);
+    set(c.image, clean_(body.image, 500)); set(c.keterangan, clean_(body.keterangan, 300));
+    set(c.satuan, clean_(body.satuan, 20) || 'unit');
+    if (!po) set(c.group, clean_(body.kelompok, 40)); // pre-order dibiarkan kosong supaya masuk kelompok Pre-order
+    const min = Math.floor(Number(body.min) || 0); if (min > 0) set(c.min, min);
+    if (stock > 0) logStock_([{ id: id, name: name, delta: stock, stock: stock, note: 'Barang baru' }]);
+    const fresh = readProducts_().rows.find(r => r.index === target);
+    return { ok: true, product: toProduct_(fresh.values, fresh.col) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Baris barang yang ditambah manual di Sheets dengan id kosong -> diberi ID terbesar + 1
+function fillMissingIds_(prod) {
+  if (prod.col.id < 0) return;
+  let next = nextProductId_(prod);
+  prod.rows.forEach(r => {
+    if (String(r.values[prod.col.id]).trim() === '') { prod.sheet.getRange(r.index, prod.col.id + 1).setValue(next); r.values[prod.col.id] = next; next++; }
+  });
+}
+
 /** Otomatis: angka stok yang diketik langsung di tab produk ikut dicatat di Mutasi Stok. */
 function onEdit(e) {
   try {
     const sh = e.range.getSheet();
     if (sh.getSheetId() !== productSheet_().getSheetId()) return;
     const prod = readProducts_();
+    fillMissingIds_(prod);
     const c = prod.col.stock + 1;
     if (c < 1 || c < e.range.getColumn() || c > e.range.getColumn() + e.range.getNumColumns() - 1) return;
     const single = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
@@ -927,9 +1008,10 @@ function siapkanSheet() {
   detailSheet_();
 
   const ps = productSheet_();
-  ensureColumns_(ps, ['kelompok', 'satuan', 'min_beli', 'sorotan']);
+  ensureColumns_(ps, ['kelompok', 'satuan', 'min_beli', 'sorotan', 'sembunyikan']);
   const ph = headerIndex_(ps);
   ps.getRange(2, ph['sorotan'] + 1, Math.max(ps.getMaxRows() - 1, 1), 1).insertCheckboxes();
+  ps.getRange(2, ph['sembunyikan'] + 1, Math.max(ps.getMaxRows() - 1, 1), 1).insertCheckboxes();
 }
 
 function buatInvoicePdf() {
@@ -1223,7 +1305,8 @@ function readProducts_() {
     satuan: find(['satuan', 'unit']),
     min: find(['min_beli', 'minimal']),
     sorotan: find(['sorotan', 'unggulan']),
-    preorder: find(['preorder', 'pre-order', 'po'])
+    preorder: find(['preorder', 'pre-order', 'po']),
+    hidden: find(['sembunyikan', 'hidden', 'arsip'])
   };
   const rows = values.slice(1)
     .map((v, i) => ({ values: v, index: i + 2, col: col }))
@@ -1249,7 +1332,8 @@ function toProduct_(v, col) {
     satuan: String(get(col.satuan)).trim(),
     min: num_(get(col.min)),
     sorotan: yes_(get(col.sorotan)),
-    po: po
+    po: po,
+    hidden: yes_(get(col.hidden))
   };
 }
 

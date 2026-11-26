@@ -110,6 +110,15 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .btn:hover{background:var(--green-hover)}
 .btn:active{transform:scale(.96)}
 .btn.kelola{height:32px;margin-bottom:6px;font-size:12px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:1px;text-align:left;cursor:pointer;color:var(--fg)}
+.stat b{font-size:20px;font-weight:900;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.stat.warn{background:var(--amber-tint);border-color:var(--amber-line)} .stat.warn b,.stat.warn span{color:var(--amber-text)}
+.stat.bad{background:var(--red-tint);border-color:var(--red-line)} .stat.bad b,.stat.bad span{color:var(--red-text)}
+.tgl{width:46px;height:28px;border-radius:999px;border:none;background:var(--faint);position:relative;cursor:pointer;flex:none;transition:background .2s}
+.tgl::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s}
+.tgl.on{background:var(--green)} .tgl.on::after{transform:translateX(18px)}
 .btn.out{background:transparent;border:1px solid var(--line);color:var(--fg);box-shadow:none}
 .btn .ico{font-size:16px}
 .stepc{display:flex;align-items:center;justify-content:space-between;height:40px;border-radius:12px;border:1px solid var(--green);background:var(--green-tint)}
@@ -338,7 +347,7 @@ const gicon = g => g && g.icon ? `<span class="mico" aria-hidden="true" style="-
 // ==========================================================
 const S = { v: 'home', group: null, sub: 'Semua', sort: 'default', q: '', cq: '', cart: [], user: null, token: '',
   sheet: null, products: [], loaded: false, loadError: false, apiVersion: 1,
-  orders: null, ordersLoading: false, ordersError: '', open: null, hf: 'semua', hq: '' };
+  orders: null, ordersLoading: false, ordersError: '', open: null, hf: 'semua', hq: '', sf: 'tampil', sq: '' };
 const hist = [];
 const $ = id => document.getElementById(id);
 const rp = n => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
@@ -349,7 +358,7 @@ const logged = () => !!S.user;
 const isOwner = () => !!S.user && S.user.role === 'owner';
 const groupOf = name => GROUPS.find(g => g.n.toLowerCase() === String(name || '').toLowerCase()) || null;
 const prod = id => S.products.find(p => p.id === +id);
-const visible = p => p.po || p.stock > 0 || isOwner();        // stok 0 disembunyikan dari pelanggan (pemilik tetap melihat untuk isi stok)
+const visible = p => isOwner() || (!p.hidden && (p.po || p.stock > 0));       // stok 0 disembunyikan dari pelanggan (pemilik tetap melihat untuk isi stok)
 const inGroup = g => S.products.filter(p => visible(p) && p.group.toLowerCase() === g.n.toLowerCase());
 const inCart = id => S.cart.find(x => x.id === +id);
 const maxQ = p => p.po ? 999 : p.stock;
@@ -371,7 +380,7 @@ function normalizeProduct(p, i) {
     price: p.price === undefined || p.price === null ? null : n(p.price),
     stock: n(p.stock), group: g ? g.n : group, sub: (cat === 'pre-order' || cat === 'po') ? '' : cat,
     image: String(p.image || '').trim(), keterangan: String(p.keterangan || '').trim(),
-    satuan: String(p.satuan || '').trim(), min: n(p.min), sorotan: !!p.sorotan, po
+    satuan: String(p.satuan || '').trim(), min: n(p.min), sorotan: !!p.sorotan, po, hidden: !!p.hidden
   };
 }
 
@@ -382,6 +391,7 @@ function thumb(p) {
 // Foto gagal dimuat -> tampilkan ikon kategori
 function imgFail(img) { const s = document.createElement('span'); s.className = img.dataset.tone || 'c-gen'; s.innerHTML = gicon(groupOf(img.dataset.g)); img.parentNode.replaceWith(s); }
 function badge(p) {
+  if (p.hidden) return '<span class="badge" style="background:#6b7280">Disembunyikan</span>';
   if (p.po) return '<span class="badge b-po">Pre-Order</span>';
   if (p.stock <= 0) return '<span class="badge" style="background:#6b7280">Habis</span>';
   if (p.stock <= 3) return `<span class="badge b-low">Sisa ${p.stock}</span>`;
@@ -453,6 +463,7 @@ async function loadOrders(force) {
   } catch (e) { S.ordersError = 'Tidak bisa terhubung. Periksa internet Anda.'; }
   S.ordersLoading = false;
   if (S.v === 'hist') { $('view').innerHTML = V.hist(); }
+  if (S.v === 'home' && isOwner()) render();
 }
 
 // ==========================================================
@@ -503,23 +514,23 @@ function stepper(p, cls) {
   return `<div class="${cls}${short ? ' short' : ''} pop"><button data-ch="${p.id}" data-d="-1" aria-label="Kurangi">${ic(e.q <= 1 ? 'trash' : 'minus')}</button><span>${e.q}</span><button data-ch="${p.id}" data-d="1" aria-label="Tambah">${ic('plus')}</button></div>${short && cls === 'stepc' ? `<p class="hint">Tambah ${minOf(p) - e.q} lagi (min. ${minOf(p)})</p>` : ''}`;
 }
 function cardAction(p) {
+  if (isOwner()) return `<button class="btn out" data-item="${p.id}">${ic('userpen')}${!p.po && p.stock <= 0 ? 'Isi stok' : 'Kelola'}</button>`;
   if (!logged()) return `<button class="btn out" data-login="1">${ic('login')}Masuk untuk beli</button>`;
   if (!p.po && p.stock <= 0) return isOwner() ? `<button class="btn out" data-item="${p.id}">${ic('userpen')}Isi stok</button>` : `<button class="btn out" disabled>Stok habis</button>`;
   return inCart(p.id) ? stepper(p, 'stepc') : `<button class="btn" data-ch="${p.id}" data-d="1">${ic(p.po ? 'clock' : 'cartplus')}${p.po ? 'Pre-Order' : 'Keranjang'}</button>`;
 }
 function rowAction(p) {
+  if (isOwner()) return `<button class="add out" data-item="${p.id}">${ic('userpen')}Kelola</button>`;
   if (!logged()) return `<button class="add out" data-login="1">${ic('lock')}Masuk</button>`;
   if (!p.po && p.stock <= 0) return isOwner() ? `<button class="add out" data-item="${p.id}">${ic('userpen')}Isi stok</button>` : `<button class="add out" disabled>Habis</button>`;
   return inCart(p.id) ? stepper(p, 'mini-step') : `<button class="add" data-ch="${p.id}" data-d="1">${ic('plus')}Tambah</button>`;
 }
-// Pemilik: buka detail barang untuk ubah stok & harga (barang habis sudah punya tombol "Isi stok")
-const kelolaBtn = (p, cls) => (isOwner() && (p.po || p.stock > 0) ? `<button class="${cls}" data-item="${p.id}">${ic('userpen')}Kelola</button>` : '');
 function pcard(p, i) {
   return `<article class="pc" style="--i:${i || 0}"><button class="img" data-item="${p.id}" aria-label="Detail ${esc(p.name)}">${thumb(p)}${badge(p)}</button>
-  <div class="bd"><div class="nm" data-item="${p.id}">${esc(p.name)}</div>${p.keterangan ? `<div class="ket">${esc(p.keterangan)}</div>` : ''}${price(p)}<div class="mn">${minLabel(p)}</div>${kelolaBtn(p, 'btn out kelola')}<div class="act" data-act="${p.id}">${cardAction(p)}</div></div></article>`;
+  <div class="bd"><div class="nm" data-item="${p.id}">${esc(p.name)}</div>${p.keterangan ? `<div class="ket">${esc(p.keterangan)}</div>` : ''}${price(p)}<div class="mn">${minLabel(p)}</div><div class="act" data-act="${p.id}">${cardAction(p)}</div></div></article>`;
 }
 function prow(p, i) {
-  return `<div class="row" style="--i:${i || 0}"><span class="th" data-item="${p.id}">${thumb(p)}</span><div class="info" data-item="${p.id}"><span class="nm">${esc(p.name)}</span>${price(p)}<div class="sm">${p.po ? 'Pre-order' : p.stock <= 3 ? `<span style="color:var(--red);font-weight:600">Sisa ${p.stock}</span>` : `Stok ${p.stock}`}${p.keterangan ? ' · ' + esc(p.keterangan) : ''}${minOf(p) > 1 ? ` · min. ${minOf(p)}` : ''}</div></div>${kelolaBtn(p, 'add out')}<div data-ract="${p.id}">${rowAction(p)}</div></div>`;
+  return `<div class="row" style="--i:${i || 0}"><span class="th" data-item="${p.id}">${thumb(p)}</span><div class="info" data-item="${p.id}"><span class="nm">${esc(p.name)}</span>${price(p)}<div class="sm">${p.po ? 'Pre-order' : p.stock <= 3 ? `<span style="color:var(--red);font-weight:600">Sisa ${p.stock}</span>` : `Stok ${p.stock}`}${p.keterangan ? ' · ' + esc(p.keterangan) : ''}${minOf(p) > 1 ? ` · min. ${minOf(p)}` : ''}</div></div><div data-ract="${p.id}">${rowAction(p)}</div></div>`;
 }
 
 // ==========================================================
@@ -547,6 +558,40 @@ function homeBody() {
   <div class="grid4 stagger">${GROUPS.map((g, i) => { const soon = !inGroup(g).length; return `<button class="tile${g.n === 'Pre-order' && !soon ? ' po' : ''}${soon ? ' soon' : ''}" data-group="${g.n}" style="--i:${i}"><span class="bx">${gicon(g)}</span><span class="lb">${g.n}</span></button>`; }).join('')}</div>
   ${sorotan.length ? `<p class="h sec">Sorotan</p><div class="grid2 stagger">${sorotan.map((p, i) => pcard(p, i + 4)).join('')}</div>` : ''}`;
 }
+// ---------- pemilik: beranda & daftar barang ----------
+const lowStock = p => !p.po && !p.hidden && p.stock > 0 && p.stock <= 3;
+function ownerHome() {
+  if (!S.orders && !S.ordersLoading && S.apiVersion >= 2) setTimeout(() => loadOrders(), 0);
+  const os = S.orders || [];
+  const fresh = os.filter(o => o.status === 'Baru').length;
+  const poWait = os.filter(o => o.jenis === 'PO' && (STEP[o.status] || 0) < 2).length;
+  const owe = os.filter(o => !o.lunas && !(o.jenis === 'PO' && (STEP[o.status] || 0) < 3)).reduce((a, o) => a + orderTotal(o), 0);
+  const low = S.products.filter(lowStock).sort((a, b) => a.stock - b.stock);
+  const out = S.products.filter(p => !p.po && !p.hidden && p.stock <= 0).length;
+  const n = v => (S.orders ? v : '…');
+  const tile = (jump, val, label, tone) => `<button class="stat${tone ? ' ' + tone : ''}" data-jump="${jump}"><b>${val}</b><span>${label}</span></button>`;
+  return `<div class="hero"><span class="greet">${greeting()},</span><h3>${esc(S.user.nama || S.user.username)}</h3><p>Ringkasan toko hari ini.</p></div>
+    <div class="stats">
+      ${tile('hist:semua', n(fresh), 'Pesanan baru', fresh ? 'warn' : '')}
+      ${tile('hist:po', n(poWait), 'PO menunggu barang', poWait ? 'warn' : '')}
+      ${tile('stock:low', low.length, 'Stok hampir habis', low.length ? 'bad' : '')}
+      ${tile('hist:belum', S.orders ? rp(owe) : '…', 'Belum dibayar', '')}
+    </div>
+    <div class="grid2"><button class="btn" data-addp="1">${ic('plus')}Tambah barang</button><button class="btn out" data-jump="stock:po">${ic('box')}Barang PO datang</button></div>
+    ${low.length ? `<p class="h sec">Stok hampir habis</p><div class="grid2 stagger">${low.slice(0, 6).map((p, i) => pcard(p, i)).join('')}</div>` : `<div class="sm" style="text-align:center;padding:10px">Tidak ada barang yang hampir habis.${out ? ` ${out} barang habis, lihat di tab Barang.` : ''}</div>`}`;
+}
+const STOCK_FILTERS = [['tampil', 'Tampil'], ['low', 'Hampir habis'], ['habis', 'Habis'], ['po', 'PO'], ['hidden', 'Disembunyikan']];
+const stockFilter = (k, p) => k === 'hidden' ? p.hidden : !p.hidden && (k === 'po' ? p.po : k === 'habis' ? !p.po && p.stock <= 0 : k === 'low' ? lowStock(p) : (p.po || p.stock > 0));
+function stockBody() {
+  const q = S.sq.trim().toLowerCase();
+  const items = S.products.filter(p => stockFilter(S.sf, p) && (!q || `#${p.id} ${p.id} ${p.name} ${p.sub} ${p.group}`.toLowerCase().includes(q))).sort((a, b) => a.id - b.id);
+  if (!items.length) return `<div class="empty">${ic('box')}<b style="color:var(--fg)">Tidak ada barang</b><span class="sm">Coba filter atau kata lain</span></div>`;
+  const pill = p => p.hidden ? '<span class="st" style="background:var(--soft);color:var(--muted)">Disembunyikan</span>'
+    : p.po ? '<span class="st" style="background:var(--amber-tint);color:var(--amber-text)">PO</span>'
+    : p.stock <= 0 ? '<span class="st" style="background:var(--soft);color:var(--muted)">Habis</span>'
+    : `<span class="st" style="background:${p.stock <= 3 ? 'var(--red-tint);color:var(--red-text)' : 'var(--green-tint);color:var(--green-text)'}">${p.stock <= 3 ? 'Sisa' : 'Stok'} ${p.stock}</span>`;
+  return `<p class="count" style="margin:0">${items.length} barang · ketuk untuk kelola</p><div class="list">${items.map(p => `<button class="row" data-item="${p.id}" style="width:100%;background:none;border-left:none;border-right:none;border-top:none;text-align:left;cursor:pointer"><span class="th">${thumb(p)}</span><span class="info" style="min-width:0;flex:1"><span class="sm" style="font-weight:700">#${p.id}</span><span class="nm" style="display:block">${esc(p.name)}</span><span class="sm">${esc(p.sub ? subLabel(p.sub) : p.group)} · ${rp(p.price)}</span></span>${pill(p)}</button>`).join('')}</div>`;
+}
 function listBody() {
   const g = groupOf(S.group); const q = S.cq.trim().toLowerCase();
   const items = sorted(inGroup(g).filter(p => (S.sub === 'Semua' || p.sub === S.sub) && (!q || `${p.name} ${p.keterangan}`.toLowerCase().includes(q))));
@@ -555,6 +600,7 @@ function listBody() {
 
 const V = {
   home: () => {
+    if (isOwner() && S.loaded) return ownerHome();
     if (S.loadError) return `<div class="soonbox pop"><span class="ic">${ic('refresh')}</span><h4>Katalog belum bisa dimuat</h4><p>Periksa koneksi internet Anda, lalu coba lagi.</p><button class="big green" data-reload="1" style="margin-top:8px;max-width:240px">Coba lagi</button></div>`;
     if (!S.loaded) return `<div class="hero"><h3>Memuat katalog…</h3><p>Sebentar ya.</p></div><div class="grid2">${'<div class="skel"></div>'.repeat(4)}</div>`;
     return `<div class="hero">${logged()
@@ -562,6 +608,12 @@ const V = {
       : `<h3>Katalog ASA</h3><p>Pilih barang, masukkan ke keranjang, lalu kirim pesanan langsung ke WhatsApp toko.</p><div class="lockban"><span>${ic('lock')} Harga khusus pelanggan terdaftar.</span><button data-login="1">Masuk untuk lihat harga</button></div>`}</div>
     <label class="srch">${ic('search')}<input id="q" type="search" placeholder="Cari sepeda, ban, rem, warna…" value="${esc(S.q)}" autocomplete="off"></label>
     <div id="homeBody">${homeBody()}</div>`;
+  },
+  stock: () => {
+    const n = k => S.products.filter(p => stockFilter(k, p)).length;
+    return `<div style="display:flex;gap:8px"><label class="srch" style="flex:1;margin:0">${ic('search')}<input id="sq" type="search" placeholder="Cari nama atau ID…" value="${esc(S.sq)}" autocomplete="off"></label><button class="btn" data-addp="1" style="width:auto;padding:0 14px;height:44px">${ic('plus')}Tambah</button></div>
+      <div class="chips" style="margin:0">${STOCK_FILTERS.map(([k, l]) => `<button class="chip ${S.sf === k ? 'on' : ''}" data-sf="${k}">${l} (${n(k)})</button>`).join('')}</div>
+      <div id="stockBody" style="display:flex;flex-direction:column;gap:8px">${stockBody()}</div>`;
   },
   cats: () => `<div class="list stagger">${GROUPS.map((g, i) => { const n = inGroup(g).length; return `<button class="row${n ? '' : ' soon'}" data-group="${g.n}" style="--i:${i}"><span class="th">${gicon(g)}</span><span class="info"><span class="nm" style="font-size:15px">${g.n}</span>${n ? `<span class="sm">${n} barang</span>` : ''}</span><span style="color:var(--faint);font-size:20px">${ic('chev')}</span></button>`; }).join('')}</div>`,
   list: () => {
@@ -739,8 +791,10 @@ V.hist = () => {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">${histFilters()}<button class="ib" data-reloadhist="1" aria-label="Muat ulang riwayat" style="width:38px;height:38px;flex-shrink:0">${ic('refresh')}</button></div>
     <div id="histBody">${histList()}</div>`;
 };
-const TITLE = { cats: 'Semua kategori', acc: 'Akun', hist: 'Riwayat pesanan' };
+const TITLE = { cats: 'Semua kategori', acc: 'Akun', hist: 'Riwayat pesanan', stock: 'Barang' };
 const NAV = [['home', 'home', 'Beranda'], ['hist', 'receipt', 'Riwayat'], ['cats', 'grid', 'Kategori'], ['cart', 'cart', 'Keranjang'], ['acc', 'user', 'Akun']];
+// Pemilik tidak belanja: tanpa Keranjang, ada tab Barang
+const NAV_OWNER = [['home', 'home', 'Beranda'], ['hist', 'receipt', 'Pesanan'], ['stock', 'box', 'Barang'], ['acc', 'user', 'Akun']];
 
 // ==========================================================
 // GAMBAR ULANG
@@ -750,17 +804,21 @@ function isDark() { const r = document.documentElement.dataset.theme; return r ?
 function chrome() {
   const t = totals(); const titled = S.v !== 'home';
   const title = S.v === 'list' ? S.group : (S.v === 'hist' && isOwner() ? 'Semua pesanan' : TITLE[S.v]);
-  const right = logged()
+  const right = isOwner()
+    ? `<span style="background:var(--green-tint);color:var(--green-text);font-weight:800;font-size:12px;padding:5px 11px;border-radius:999px">Pemilik</span>`
+    : logged()
     ? `<button class="cartbtn" id="cartBtn" data-cart="1" aria-label="Keranjang, ${t.q} barang">${ic('cart')}<span class="n">${t.q}</span></button>`
     : `<button class="loginbtn" data-login="1">${ic('login')}Masuk</button>`;
   $('topbar').innerHTML = titled
     ? `<button class="ib" data-back="1" aria-label="Kembali">${ic('back')}</button><span class="ttl">${esc(title)}</span>${right}`
     : `<img class="logo-img" alt="ASA" src="logo-asa.png"><span class="spacer"></span><button class="ib" aria-label="Ganti tema" data-theme="1">${ic(isDark() ? 'sun' : 'moon')}</button>${right}`;
-  const show = logged() && t.q > 0;
+  const show = logged() && !isOwner() && t.q > 0;
   $('bottom').innerHTML = show ? `<div class="fbar${barShown ? '' : ' enter'}"><button data-cart="1"><span>${ic('cart')}${t.q} barang</span><span>${rp(t.p)} ${ic('chev')}</span></button></div>` : '';
   barShown = show;
   const active = S.v === 'list' ? 'cats' : S.v;
-  $('nav').innerHTML = NAV.map(([v, i, l]) => v === 'cart'
+  const navs = isOwner() ? NAV_OWNER : NAV;
+  $('nav').style.gridTemplateColumns = `repeat(${navs.length},1fr)`;
+  $('nav').innerHTML = navs.map(([v, i, l]) => v === 'cart'
     ? `<button id="navCart" data-cart="1">${ic(i)}${l}${logged() && t.q ? `<span class="dot">${t.q}</span>` : ''}</button>`
     : `<button data-go="${v}" class="${active === v ? 'on' : ''}" ${active === v ? 'aria-current="page"' : ''}>${ic(i)}${l}</button>`).join('');
   document.querySelector('meta[name="theme-color"]').content = isDark() ? '#18181b' : '#ffffff';
@@ -797,15 +855,36 @@ function sheetHTML() {
       <button class="big green" type="submit" id="lsubmit">Masuk</button>
       <p class="sm" style="text-align:center;margin:0">Belum punya akun atau lupa PIN? <a href="https://wa.me/${STORE_WA_NUMBER}?text=${encodeURIComponent(`Halo ${STORE_NAME}, saya ingin daftar sebagai pelanggan / minta PIN.\n\nNama: \nAlamat: `)}" target="_blank" rel="noopener" style="color:var(--green-text);font-weight:700">Hubungi toko via WhatsApp</a></p>
     </form>`;
+  if (S.sheet === 'add') {
+    const nextId = S.products.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+    const cats = [...new Set(S.products.map(p => p.sub).filter(Boolean))].sort();
+    const groups = GROUPS.map(g => g.n).filter(g => g !== 'Pre-order');
+    return `<div class="grab"></div><div class="shead"><b>Tambah barang</b><button class="x" data-close="1" aria-label="Tutup">${ic('x')}</button></div>
+    <form class="sbody" id="addForm" novalidate>
+      <div class="sm">ID otomatis: <b>#${nextId}</b> (ID terbesar + 1)</div>
+      <div><label class="fl" for="np-name">Nama barang <span style="color:var(--red)">*</span></label><input class="inp" id="np-name" maxlength="120" placeholder='Contoh: 20" BMX Pacific Hotshot'></div>
+      <div><span class="fl">Jenis</span><div class="chips" style="margin:0"><button type="button" class="chip on" data-addpo="0">Ready (ada stok)</button><button type="button" class="chip" data-addpo="1">Pre-order</button></div></div>
+      <div id="np-readyrow" style="display:flex;flex-direction:column;gap:10px">
+        <div><label class="fl" for="np-group">Kelompok</label><select class="inp" id="np-group">${groups.map(g => `<option>${esc(g)}</option>`).join('')}</select></div>
+        <div><label class="fl" for="np-cat">Kategori <span style="color:var(--red)">*</span></label><input class="inp" id="np-cat" list="np-cats" placeholder="bmx, mini, mtb, ban luar…" autocapitalize="none"><datalist id="np-cats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+        <div><label class="fl" for="np-stock">Stok awal</label><input class="inp" id="np-stock" inputmode="numeric" value="0"></div>
+      </div>
+      <div style="display:flex;gap:8px"><div style="flex:2"><label class="fl" for="np-price">Harga <span style="color:var(--red)">*</span></label><input class="inp" id="np-price" inputmode="numeric" placeholder="Rp"></div><div style="flex:1"><label class="fl" for="np-unit">Satuan</label><input class="inp" id="np-unit" value="unit" maxlength="20"></div></div>
+      <div><label class="fl" for="np-min">Minimal beli <span class="sm">(kosongkan = aturan biasa)</span></label><input class="inp" id="np-min" inputmode="numeric"></div>
+      <div><label class="fl" for="np-ket">Keterangan <span class="sm">(opsional)</span></label><input class="inp" id="np-ket" maxlength="300" placeholder="Warna, ukuran…"></div>
+      <div><label class="fl" for="np-img">Link foto <span class="sm">(opsional)</span></label><input class="inp" id="np-img" maxlength="500" placeholder="https://…" autocapitalize="none"></div>
+      <button class="big green" type="submit" id="np-save">${ic('check')}Tambahkan barang</button>
+    </form>`;
+  }
   if (S.sheet && S.sheet.startsWith('item:')) {
     const p = prod(S.sheet.slice(5)); if (!p) return '';
     return `<div class="grab"></div><div class="shead"><b>Detail barang</b><button class="x" data-close="1" aria-label="Tutup">${ic('x')}</button></div>
     <div class="sbody"><div class="detail-img">${thumb(p)}${badge(p)}</div>
       <div><span class="pill" style="text-transform:uppercase;font-size:11px">${esc(p.group)}${p.sub ? ' · ' + esc(subLabel(p.sub)) : ''}</span>
-      <div class="dttl" style="margin-top:8px">${esc(p.name)}</div>${price(p, 'bigprice')}<div class="sm">${minLabel(p)}</div></div>
+      <div class="dttl" style="margin-top:8px">${isOwner() ? `<span class="sm" style="font-weight:700">#${p.id}</span> ` : ''}${esc(p.name)}</div>${price(p, 'bigprice')}<div class="sm">${minLabel(p)}</div></div>
       ${p.keterangan ? `<div class="box"><div class="lbl">Keterangan</div><div style="white-space:pre-line">${esc(p.keterangan)}</div></div>` : ''}
       ${isOwner() ? ownerPanel(p) : ''}
-      <div style="display:flex;gap:8px;align-items:flex-start"><button class="btn out" data-close="1" style="width:auto;padding:0 18px">Tutup</button><div style="flex:1" data-act="${p.id}">${cardAction(p)}</div></div></div>`;
+      <div style="display:flex;gap:8px;align-items:flex-start"><button class="btn out" data-close="1" style="width:auto;padding:0 18px">Tutup</button>${isOwner() ? '' : `<div style="flex:1" data-act="${p.id}">${cardAction(p)}</div>`}</div></div>`;
   }
   const t = totals();
   const head = `<div class="grab"></div><div class="shead">${ic('cart')}<b>Keranjang Belanja</b><span class="pill" style="background:var(--green-tint);color:var(--green-text)">${t.q} barang</span><button class="x" data-close="1" aria-label="Tutup">${ic('x')}</button></div>`;
@@ -830,7 +909,8 @@ function sheetHTML() {
 }
 // ---------- pemilik: ubah stok & harga barang ----------
 function ownerPanel(p) {
-  return `<div class="edit" id="pedit"><div class="lbl">${ic('userpen')} Kelola barang (pemilik)</div>
+  return `<div class="edit"><div class="ln" style="align-items:center"><span><b>Tampil di pelanggan</b><br><span class="sm">${p.hidden ? 'Disembunyikan: pelanggan tidak melihat barang ini' : 'Matikan untuk menyembunyikan barang ini dari pelanggan'}</span></span><button class="tgl${p.hidden ? '' : ' on'}" data-hide="${p.id}" id="hideBtn" role="switch" aria-checked="${!p.hidden}" aria-label="Tampil di pelanggan"></button></div></div>
+  <div class="edit" id="pedit"><div class="lbl">${ic('userpen')} Kelola barang (pemilik)</div>
     <div class="ectl"><span class="fl" style="width:48px;margin:0">Stok</span>
       <div class="cstep"><button data-psd="-1" aria-label="Kurangi stok">${ic('minus')}</button><input class="eq" id="pstock" inputmode="numeric" value="${p.stock}" aria-label="Stok ${esc(p.name)}"><button data-psd="1" aria-label="Tambah stok">${ic('plus')}</button></div>
       <span class="sm">${esc(p.satuan || 'unit')}</span></div>
@@ -901,6 +981,27 @@ async function ownerCall(payload, btn, busyText) {
 function afterOwnerChange(p, product) {
   if (product) Object.assign(p, normalizeProduct(product, 0));
   S.orders = null; syncCart(); renderSheet(false); refresh(); render(); loadPinfo(p.id);
+}
+async function toggleHidden(id) {
+  const p = prod(id); if (!p) return;
+  const r = await ownerCall({ action: 'set_hidden', id: p.id, hidden: !p.hidden }, $('hideBtn'), '…');
+  if (!r) return;
+  afterOwnerChange(p, r.product);
+  toast(p.hidden ? `${p.name} disembunyikan dari pelanggan` : `${p.name} tampil lagi di pelanggan`);
+}
+async function saveNewProduct(e) {
+  e.preventDefault();
+  const po = document.querySelector('[data-addpo].on')?.dataset.addpo === '1';
+  const v = id => ($(id)?.value || '').trim();
+  const body = { action: 'add_product', name: v('np-name'), po, kelompok: v('np-group'), category: v('np-cat'), stock: digits(v('np-stock')), price: digits(v('np-price')), satuan: v('np-unit'), min: digits(v('np-min')), keterangan: v('np-ket'), image: v('np-img') };
+  if (!body.name) { toast('Nama barang wajib diisi', true); $('np-name').focus(); return; }
+  if (!po && !body.category) { toast('Isi kategori barang', true); $('np-cat').focus(); return; }
+  if (!(body.price > 0)) { toast('Harga harus diisi', true); $('np-price').focus(); return; }
+  const r = await ownerCall(body, $('np-save'), 'Menyimpan…');
+  if (!r) return;
+  const p = normalizeProduct(r.product, S.products.length); S.products.push(p);
+  closeSheet(); render();
+  toast(`#${p.id} ${p.name} ditambahkan`);
 }
 async function saveArrival(id) {
   const p = prod(id); if (!p) return;
@@ -986,6 +1087,7 @@ function renderSheet(animate) {
     if (note && $('note')) $('note').value = note; if (addr && $('addr')) $('addr').value = addr;
   }
   if (S.sheet === 'login') { setTimeout(() => $('lu')?.focus(), 300); $('loginForm').addEventListener('submit', submitLogin); }
+  if (S.sheet === 'add' && $('addForm')) $('addForm').addEventListener('submit', saveNewProduct);
 }
 function openSheet(name) { S.sheet = name; renderSheet(true); }
 function closeSheet() {
@@ -1068,6 +1170,11 @@ $('phone').addEventListener('click', e => {
   if (d.theme) { const dark = isDark(); document.documentElement.dataset.theme = dark ? 'light' : 'dark'; try { localStorage.setItem('asa-theme', dark ? 'light' : 'dark'); } catch (x) {} chrome(); return; }
   if (d.back) { back(); return; }
   if (d.cart) { if (!logged()) { openSheet('login'); return; } openSheet('cart'); return; }
+  if (d.jump) { const [v, k] = d.jump.split(':'); if (v === 'stock') S.sf = k; else { S.hf = k; S.open = null; } goTab(v); return; }
+  if (d.addp) { openSheet('add'); setTimeout(() => $('np-name')?.focus(), 250); return; }
+  if (d.addpo) { document.querySelectorAll('[data-addpo]').forEach(c => c.classList.toggle('on', c === t)); $('np-readyrow').hidden = d.addpo === '1'; return; }
+  if (d.sf) { S.sf = d.sf; document.querySelectorAll('[data-sf]').forEach(c => c.classList.toggle('on', c.dataset.sf === S.sf)); $('stockBody').innerHTML = stockBody(); return; }
+  if (d.hide) { toggleHidden(d.hide); return; }
   if (d.go) { if (d.go !== S.v) goTab(d.go); return; }
   if (d.group) { go('list', { group: d.group, sub: 'Semua', sort: 'default', cq: '' }); return; }
   if (d.sub) { S.sub = d.sub; document.querySelectorAll('[data-sub]').forEach(c => c.classList.toggle('on', c.dataset.sub === S.sub)); $('listBody').innerHTML = listBody(); return; }
@@ -1101,6 +1208,9 @@ $('phone').addEventListener('input', e => {
   const el = e.target;
   if (el.id === 'q') { S.q = el.value; $('homeBody').innerHTML = homeBody(); }
   if (el.id === 'cq') { S.cq = el.value; $('listBody').innerHTML = listBody(); }
+  if (el.id === 'sq') { S.sq = el.value; $('stockBody').innerHTML = stockBody(); }
+  if (el.id === 'np-price') { const v = digits(el.value); el.value = v ? num(v) : ''; }
+  if (el.id === 'np-stock' || el.id === 'np-min') el.value = el.value.replace(/\D/g, '');
   if (el.id === 'hq') { S.hq = el.value; S.open = null; $('histBody').innerHTML = histList(); }
   if (el.id === 'lp') el.value = el.value.replace(/\D/g, '').slice(0, 6);
   if (el.id === 'pstock') { el.value = el.value.replace(/\D/g, ''); ownerNote(prod(S.sheet.slice(5))); }
