@@ -627,7 +627,10 @@ function buatInvoicePdf() {
   const details = detailMap_();
   const o = orderFromRow_(r, details, tz);
   const w = r.get('Waktu');
-  o.tglPanjang = w instanceof Date ? Number(Utilities.formatDate(w, tz, 'd')) + ' ' + BULAN_PANJANG[Number(Utilities.formatDate(w, tz, 'M')) - 1] + ' ' + Utilities.formatDate(w, tz, 'yyyy') : o.tgl;
+  const tglPanjang = d => Number(Utilities.formatDate(d, tz, 'd')) + ' ' + BULAN_PANJANG[Number(Utilities.formatDate(d, tz, 'M')) - 1] + ' ' + Utilities.formatDate(d, tz, 'yyyy');
+  // Tanggal invoice = hari invoice dicetak (tanggal tagihan); tanggal pesan ditulis kecil di bawahnya
+  o.tglPanjang = tglPanjang(new Date());
+  o.tglPesan = w instanceof Date ? tglPanjang(w) : o.tgl;
   o.wa = String(r.get('No. WA')).replace(/^'/, '').trim();
   if (!o.wa) { const c = findCustomer_(normalizeUsername_(r.get('Username'))); if (c) o.wa = c.noWa; }
   if (details[o.no]) details[o.no].forEach((d, k) => { o.items[k].u = d.item.u; });
@@ -653,16 +656,43 @@ function invoiceFolder_() {
   return it.hasNext() ? it.next() : DriveApp.createFolder(INVOICE_FOLDER_NAME);
 }
 
-// Invoice A5 mendatar dibuat sebagai Google Docs sementara, lalu diekspor ke PDF.
+// Invoice dibuat sebagai Google Docs sementara, lalu diekspor ke PDF.
+// Kertas A4 tegak berisi 2 lembar invoice ukuran A5 (atas & bawah), tinggal dicetak lalu dipotong di tengah.
 function invoicePdf_(o) {
   const A = DocumentApp.Attribute;
   const doc = DocumentApp.create('Invoice ' + (o.fileName || o.no));
   const body = doc.getBody();
-  body.setPageWidth(595.3).setPageHeight(419.5)
-    .setMarginTop(20).setMarginBottom(18).setMarginLeft(22).setMarginRight(22);
+  body.setPageWidth(595.3).setPageHeight(841.9)
+    .setMarginTop(16).setMarginBottom(14).setMarginLeft(22).setMarginRight(22);
   const base = {}; base[A.FONT_FAMILY] = 'Arial'; base[A.FONT_SIZE] = 8; base[A.FOREGROUND_COLOR] = '#111827';
   body.setAttributes(base);
+  const tiny = p => { p.setSpacingBefore(0).setSpacingAfter(0).setLineSpacing(1).editAsText().setFontSize(1); return p; };
+  const half = () => {
+    const t = body.appendTable([['']]);
+    t.setBorderWidth(0);
+    t.getRow(0).setMinimumHeight(390); // setengah A4 = ukuran A5
+    const c = t.getCell(0, 0);
+    c.setWidth(551).setPaddingTop(0).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
+    tiny(c.getChild(0).asParagraph());
+    invoiceCopy_(c, o);
+  };
+  tiny(body.getChild(0).asParagraph());
+  half();
+  const cut = body.appendParagraph('✂  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -');
+  cut.setSpacingBefore(2).setSpacingAfter(2).setLineSpacing(1).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  cut.editAsText().setFontSize(6).setForegroundColor('#9ca3af');
+  half();
+  tiny(body.appendParagraph(''));
 
+  doc.saveAndClose();
+  const file = DriveApp.getFileById(doc.getId());
+  const pdf = file.getAs('application/pdf').setName((o.fileName || o.no) + '.pdf');
+  file.setTrashed(true);
+  return pdf;
+}
+
+// Isi satu lembar invoice (ukuran A5 mendatar) di dalam sel tabel
+function invoiceCopy_(body, o) {
   const GRAY = '#6b7280';
   const style = (el, size, bold, color) => { const tx = el.editAsText(); tx.setFontSize(size); tx.setBold(!!bold); if (color) tx.setForegroundColor(color); return el; };
   const tight = p => p.setSpacingBefore(0).setSpacingAfter(0).setLineSpacing(1);
@@ -696,6 +726,7 @@ function invoicePdf_(o) {
   cellText(c2, o.title || 'INVOICE', o.title ? 11 : 13, true, o.poNote ? '#b45309' : null, RIGHT);
   addLine(c2, o.no, 9, true, null, RIGHT);
   addLine(c2, o.tglPanjang, 8, false, GRAY, RIGHT);
+  if (o.tglPesan && o.tglPesan !== o.tglPanjang) addLine(c2, 'Dipesan ' + o.tglPesan, 6.5, false, GRAY, RIGHT);
   tight(body.appendParagraph('')).editAsText().setFontSize(3);
   body.appendHorizontalRule();
 
@@ -748,12 +779,6 @@ function invoicePdf_(o) {
 
   const foot = body.appendParagraph((o.poNote ? 'Barang pre-order: dikirim setelah barang datang.  ·  ' : '') + 'Barang yang sudah diterima dan ditandatangani dianggap lengkap.  ·  Terima kasih telah berbelanja di ASA');
   tight(foot).setSpacingBefore(4); style(foot, 6, false, '#9ca3af');
-
-  doc.saveAndClose();
-  const file = DriveApp.getFileById(doc.getId());
-  const pdf = file.getAs('application/pdf').setName((o.fileName || o.no) + '.pdf');
-  file.setTrashed(true);
-  return pdf;
 }
 
 // ======================================================================
