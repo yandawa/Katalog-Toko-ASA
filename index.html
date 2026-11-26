@@ -164,7 +164,7 @@ button.row.soon .th{border-style:dashed}
 .order .chev{color:var(--faint);font-size:16px;transition:transform .25s}
 .order.open .chev{transform:rotate(90deg)}
 .order .det{border-top:1px solid var(--line);padding:10px 14px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px;animation:tabIn .25s ease both}
-.order .det .ln{display:flex;justify-content:space-between;gap:10px}
+.order .det .ln,.edit .ln,.box .ln{display:flex;justify-content:space-between;gap:10px}
 .edit{display:flex;flex-direction:column;gap:10px;background:var(--soft2);border:1px solid var(--line);border-radius:12px;padding:10px}
 .erow{display:flex;flex-direction:column;gap:6px;padding-bottom:9px;border-bottom:1px dashed var(--line)}
 .ectl{display:flex;gap:8px;align-items:center}
@@ -837,7 +837,96 @@ function ownerPanel(p) {
     <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="sm" style="align-self:center">Barang datang:</span>${[1, 5, 10, 20].map(n => `<button class="chip" data-padd="${n}" style="height:32px;padding:0 12px">+${n}</button>`).join('')}</div>
     <div class="ectl"><span class="fl" style="width:48px;margin:0">Harga</span><label class="eprice"><span>Rp</span><input id="pprice" inputmode="numeric" value="${num(p.price)}" aria-label="Harga ${esc(p.name)}"><span>/${esc(p.satuan || 'unit')}</span></label></div>
     <div class="sm" id="pnote">Sekarang: stok ${p.stock} · ${rp(p.price)}</div>
-    <button class="btn" data-psave="${p.id}" id="psaveBtn">${ic('check')}Simpan ke Google Sheets</button></div>`;
+    <button class="btn" data-psave="${p.id}" id="psaveBtn">${ic('check')}Simpan ke Google Sheets</button></div>${poTools(p)}${stockHistory(p)}`;
+}
+// ---------- pemilik: barang PO datang, pesanan PO menunggu, riwayat stok ----------
+const pinfoOf = p => (S.pinfo && S.pinfo.id === p.id ? S.pinfo : null);
+const guessSub = p => { const n = p.name.toLowerCase(); return n.includes('bmx') ? 'bmx' : n.includes('mtb') ? 'mtb' : n.includes('mini') ? 'mini' : ''; };
+function poTools(p) {
+  const info = pinfoOf(p), waiting = info && info.waiting || [];
+  const unit = esc(p.satuan || 'unit');
+  if (p.po) {
+    if (!S.arrive) return `<button class="btn out" data-arrive="1">📦 Barang PO datang${waiting.length ? ` · ${waiting.length} pesanan menunggu` : ''}</button>`;
+    const subs = [...new Set(['bmx', 'mini', 'mtb', ...S.products.map(x => x.sub).filter(Boolean)])];
+    const def = guessSub(p);
+    const list = !info || info.loading ? '<div class="sm">Memuat pesanan PO…</div>'
+      : waiting.length ? waiting.map(w => `<label class="ln" style="align-items:center;gap:8px;justify-content:flex-start"><input type="checkbox" data-afill="${esc(w.no)}" data-q="${w.q}"${w.others ? ' disabled' : ' checked'} style="width:18px;height:18px"><span><b>${esc(w.no)}</b> · ${esc(w.nama)}<br><span class="sm">${w.q} ${unit} · dipesan ${esc(w.tgl)}${w.others ? ' · ada barang PO lain, penuhi lewat tahap pesanan' : ''}</span></span></label>`).join('')
+      : '<div class="sm">Tidak ada pesanan PO yang menunggu barang ini.</div>';
+    return `<div class="edit" id="arrForm" style="border-color:var(--amber-line)"><div class="lbl" style="color:var(--amber-text)">📦 Barang PO datang</div>
+      <div class="ectl"><span class="fl" style="width:84px;margin:0">Jumlah datang</span><input class="inp" id="aqty" inputmode="numeric" placeholder="0" style="width:90px;height:36px"><span class="sm">${unit}</span></div>
+      <div class="ectl"><span class="fl" style="width:84px;margin:0">Kategori</span><select class="inp" id="acat" style="flex:1;height:36px"><option value="">Pilih kategori…</option>${subs.map(x => `<option value="${esc(x)}"${x === def ? ' selected' : ''}>${esc(subLabel(x))}</option>`).join('')}</select></div>
+      <div class="ectl"><span class="fl" style="width:84px;margin:0">Harga ready</span><label class="eprice"><span>Rp</span><input id="aprice" inputmode="numeric" value="${num(p.price)}"><span>/${unit}</span></label></div>
+      <div class="lbl" style="margin-top:2px">Pesanan PO yang dipenuhi</div>${list}
+      <div class="sm" id="anote"></div>
+      <div style="display:flex;gap:8px"><button class="btn out" data-arrivex="1" style="width:auto;padding:0 16px">Batal</button><button class="btn" data-arrsave="${p.id}" id="arrBtn">${ic('check')}Simpan barang datang</button></div></div>`;
+  }
+  const wait = waiting.length ? `<div class="edit"><div class="lbl">⏳ Pesanan PO menunggu barang ini</div>${waiting.map(w => `<div class="ln" style="align-items:center"><span><b>${esc(w.no)}</b> · ${esc(w.nama)}<br><span class="sm">${w.q} ${unit}${w.others ? ' · ada barang PO lain' : ''}</span></span><button class="btn out" data-pfill="${esc(w.no)}" style="width:auto;padding:0 12px;height:34px"${p.stock < w.q ? ' disabled' : ''}>Penuhi dari stok</button></div>`).join('')}<div class="sm">Stok sekarang ${p.stock}. "Penuhi dari stok" memotong stok dan menaikkan pesanan ke tahap 2.</div></div>` : '';
+  const toPo = p.stock <= 0 ? `<button class="btn out" data-setpo="${p.id}" id="setpoBtn">${ic('clock')}Jadikan pre-order lagi</button>` : '';
+  return wait + toPo;
+}
+function stockHistory(p) {
+  const info = pinfoOf(p);
+  if (!info) return '';
+  if (info.loading) return '<div class="sm">Memuat riwayat stok…</div>';
+  const rows = info.log || [];
+  return `<div class="box"><div class="lbl">Riwayat stok (10 terakhir)</div>${rows.length ? rows.map(l => `<div class="ln sm" style="gap:8px"><span style="flex:1;min-width:0">${esc(l.ket || '-')}<br><span style="color:var(--faint)">${esc(l.tgl)}</span></span><b style="color:${l.masuk ? 'var(--green-text)' : l.keluar ? 'var(--red)' : 'var(--fg)'}">${l.masuk ? '+' + l.masuk : l.keluar ? '−' + l.keluar : '±'}</b><span style="width:52px;text-align:right">stok ${esc(l.stok)}</span></div>`).join('') : '<div class="sm">Belum ada catatan. Catatan mulai terisi setelah stok berubah.</div>'}</div>`;
+}
+function arriveNote() {
+  const el = $('anote'); if (!el) return;
+  const qty = digits($('aqty').value);
+  const need = [...document.querySelectorAll('[data-afill]:checked')].reduce((a, c) => a + (+c.dataset.q), 0);
+  const p = prod(S.sheet.slice(5)); const left = (p ? p.stock : 0) + qty - need;
+  el.innerHTML = `Jatah PO: <b>${need}</b> · Sisa jadi stok ready: <b style="color:${left < 0 ? 'var(--red)' : 'var(--green-text)'}">${left}</b>${left < 0 ? ' (barang datang kurang)' : ''}`;
+}
+async function loadPinfo(id) {
+  S.pinfo = { id: +id, loading: true };
+  try {
+    const r = await callScript({ action: 'product_info', token: S.token, id });
+    S.pinfo = r.ok ? { id: +id, waiting: r.waiting || [], log: r.log || [] } : { id: +id, waiting: [], log: [] };
+  } catch (e) { S.pinfo = { id: +id, waiting: [], log: [] }; }
+  if (S.sheet === 'item:' + id) { renderSheet(false); arriveNote(); }
+}
+async function ownerCall(payload, btn, busyText) {
+  const old = btn.innerHTML; btn.disabled = true; btn.textContent = busyText;
+  try {
+    const r = await callScript({ token: S.token, ...payload });
+    if (!r.ok) {
+      if (r.error === 'auth') { closeSheet(); await signedOut('Sesi Anda sudah berakhir. Silakan masuk lagi.'); return null; }
+      toast(r.message || 'Belum tersimpan', true);
+    }
+    return r.ok ? r : null;
+  } catch (e) { toast('Tidak bisa terhubung. Coba lagi.', true); return null; }
+  finally { if (btn.isConnected) { btn.disabled = false; btn.innerHTML = old; } }
+}
+function afterOwnerChange(p, product) {
+  if (product) Object.assign(p, normalizeProduct(product, 0));
+  S.orders = null; syncCart(); renderSheet(false); refresh(); render(); loadPinfo(p.id);
+}
+async function saveArrival(id) {
+  const p = prod(id); if (!p) return;
+  const qty = digits($('aqty').value), price = digits($('aprice').value), category = $('acat').value;
+  const fill = [...document.querySelectorAll('[data-afill]:checked')].map(c => c.dataset.afill);
+  if (!(qty > 0)) { toast('Isi jumlah barang yang datang', true); $('aqty').focus(); return; }
+  if (!category) { toast('Pilih kategori barang', true); $('acat').focus(); return; }
+  if (!(price > 0)) { toast('Harga harus diisi', true); $('aprice').focus(); return; }
+  const r = await ownerCall({ action: 'po_arrival', id: p.id, qty, price, category, fill }, $('arrBtn'), 'Menyimpan…');
+  if (!r) return;
+  S.arrive = false; afterOwnerChange(p, r.product);
+  toast(`${p.name}: +${qty} datang${r.filled.length ? `, ${r.filled.length} pesanan PO dipenuhi` : ''}, stok ready ${p.stock}`);
+}
+async function fillFromStock(no, btn) {
+  const p = prod(S.sheet.slice(5)); if (!p) return;
+  const r = await ownerCall({ action: 'set_status', no, step: 2 }, btn, 'Memproses…');
+  if (!r) return;
+  await loadProducts(); afterOwnerChange(prod(p.id) || p, null);
+  toast(`${no} dipenuhi dari stok`);
+}
+async function setPreorder(id) {
+  const p = prod(id); if (!p) return;
+  const r = await ownerCall({ action: 'set_preorder', id: p.id }, $('setpoBtn'), 'Menyimpan…');
+  if (!r) return;
+  afterOwnerChange(p, r.product);
+  toast(`${p.name} dibuka lagi untuk pre-order`);
 }
 function ownerNote(p) {
   const st = digits($('pstock').value), pr = digits($('pprice').value);
@@ -859,7 +948,7 @@ async function saveProduct(id) {
       toast(r.message || 'Perubahan belum tersimpan', true); return;
     }
     Object.assign(p, normalizeProduct(r.product, 0));
-    syncCart(); renderSheet(false); refresh(); render();
+    syncCart(); renderSheet(false); refresh(); render(); loadPinfo(p.id);
     toast(`${p.name} disimpan: stok ${p.stock}, harga ${rp(p.price)}`);
   } catch (e) { toast('Tidak bisa terhubung. Coba lagi.', true); }
   finally { const b = $('psaveBtn'); if (b) { b.disabled = false; b.innerHTML = `${ic('check')}Simpan ke Google Sheets`; } }
@@ -986,7 +1075,12 @@ $('phone').addEventListener('click', e => {
   if (d.psave) { saveProduct(d.psave); return; }
   if (d.deliv) { if (d.deliv === 'kirim' && !canShip()) return; S.delivery = d.deliv; renderSheet(false); return; }
   if (d.ch) { change(d.ch, +d.d, t); return; }
-  if (d.item) { openSheet('item:' + d.item); return; }
+  if (d.item) { S.arrive = false; openSheet('item:' + d.item); if (isOwner()) loadPinfo(d.item); return; }
+  if (d.arrive) { S.arrive = true; renderSheet(false); arriveNote(); $('aqty')?.focus(); return; }
+  if (d.arrivex) { S.arrive = false; renderSheet(false); return; }
+  if (d.arrsave) { saveArrival(d.arrsave); return; }
+  if (d.pfill) { fillFromStock(d.pfill, t); return; }
+  if (d.setpo) { setPreorder(d.setpo); return; }
   if (d.clear) { S.cart = []; refresh(); return; }
   if (d.send) { sendOrder(); return; }
   if (d.logout) { const tok = S.token; signedOut().then(() => toast('Anda sudah keluar')); if (tok) callScript({ action: 'logout', token: tok }).catch(() => {}); return; }
@@ -1010,6 +1104,9 @@ $('phone').addEventListener('input', e => {
   if (el.id === 'hq') { S.hq = el.value; S.open = null; $('histBody').innerHTML = histList(); }
   if (el.id === 'lp') el.value = el.value.replace(/\D/g, '').slice(0, 6);
   if (el.id === 'pstock') { el.value = el.value.replace(/\D/g, ''); ownerNote(prod(S.sheet.slice(5))); }
+  if (el.id === 'aqty') { el.value = el.value.replace(/\D/g, ''); arriveNote(); }
+  if (el.id === 'aprice') { const v = digits(el.value); el.value = v ? num(v) : ''; }
+  if (el.dataset && el.dataset.afill) arriveNote();
   if (el.id === 'pprice') { const v = digits(el.value); el.value = v ? num(v) : ''; ownerNote(prod(S.sheet.slice(5))); }
 });
 $('phone').addEventListener('change', e => { if (e.target.id === 'sort') { S.sort = e.target.value; $('listBody').innerHTML = listBody(); } });
